@@ -80,15 +80,15 @@
      units once the 1157-wide row is scaled to the card's 1222.        */
   #row {
     display: flex; align-items: center;
-    gap: calc(24 * var(--s));
-    margin-top: calc(19.5 * var(--s));
-    height: calc(37 * var(--s));
+    gap: calc(30 * var(--s));
+    margin-top: calc(31 * var(--s));
+    height: calc(50 * var(--s));
   }
 
   #strip { position: relative; flex: 1 1 auto; min-width: 0; height: 100%; }
   #chips {
     display: flex; align-items: center; gap: calc(20 * var(--s));
-    height: 100%; overflow-x: auto; overflow-y: hidden;
+    height: 100%; overflow-x: auto; overflow-y: hidden; padding: calc(2 * var(--s)) 0;
     scrollbar-width: none; -ms-overflow-style: none;
   }
   #chips::-webkit-scrollbar { display: none; }
@@ -101,72 +101,81 @@
   .chip {
     position: relative; flex: none; height: 100%;
     display: inline-flex; align-items: center; justify-content: center;
-    gap: calc(8 * var(--s));
-    padding: 0 calc(42 * var(--s));
-    border: calc(1.73 * var(--s)) solid #191919;
+    gap: calc(10 * var(--s));
+    padding: 0 calc(30 * var(--s));
+    border: calc(2.34 * var(--s)) solid #191919;
     background: #fff; color: #191919;
-    font: 700 calc(16 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font: 700 calc(21 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
     white-space: nowrap; cursor: pointer;
-    border-radius: calc(18.5 * var(--s)) calc(18.5 * var(--s)) calc(18.5 * var(--s)) 0;
+    border-radius: calc(25 * var(--s)) calc(25 * var(--s)) calc(25 * var(--s)) 0;
     transition: transform .12s ease, filter .12s ease;
   }
-  .chip.flip { border-radius: calc(18.5 * var(--s)) calc(18.5 * var(--s)) 0 calc(18.5 * var(--s)); }
+  .chip.flip { border-radius: calc(25 * var(--s)) calc(25 * var(--s)) 0 calc(25 * var(--s)); }
   .chip:hover { transform: translateY(calc(-1.5 * var(--s))); }
-  .chip.active { box-shadow: inset 0 0 0 calc(2.6 * var(--s)) currentColor; }
-  .chip .emo { font-size: calc(16 * var(--s)); line-height: 1; }
+  .chip.active { box-shadow: inset 0 0 0 calc(3.5 * var(--s)) currentColor; }
+  .chip .emo { font-size: calc(21 * var(--s)); line-height: 1; }
   .chip .lbl { outline: none; }
-  .chip .mins { opacity: .55; font-weight: 400; }
+  .chip .mins { opacity: .55; font-weight: 400; outline: none; }
+  #row.editing .chip.custom .mins { opacity: .8; cursor: text; }
+  #row.editing .chip.custom .mins[contenteditable="true"] {
+    opacity: 1; background: rgba(0,0,0,.10); border-radius: calc(6 * var(--s));
+    padding: 0 calc(5 * var(--s)); min-width: calc(26 * var(--s)); text-align: center;
+  }
 
   #add {
-    flex: none; width: calc(29.6 * var(--s)); height: calc(28.5 * var(--s));
+    flex: none; width: calc(40 * var(--s)); height: calc(38.5 * var(--s));
     border: 0; cursor: pointer;
     background: rgba(255,255,255,.76); color: #191919;
-    border-radius: calc(6 * var(--s)) 0 calc(6 * var(--s)) 0;
-    font: 400 calc(20 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    border-radius: calc(8 * var(--s)) 0 calc(8 * var(--s)) 0;
+    font: 400 calc(27 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
     display: inline-flex; align-items: center; justify-content: center;
   }
   #add:hover { background: #fff; }
 
   /* edit state */
   .chip .del {
-    display: none; position: absolute; left: calc(5 * var(--s)); top: 50%;
+    display: none; position: absolute; left: calc(6 * var(--s)); top: 50%;
     transform: translateY(-50%);
-    width: calc(24 * var(--s)); height: calc(24 * var(--s));
+    width: calc(32 * var(--s)); height: calc(32 * var(--s));
     border: 0; border-radius: 50%; background: #fff; cursor: pointer;
     align-items: center; justify-content: center; padding: 0;
   }
   .chip .del::before {
-    content: ""; width: calc(11 * var(--s)); height: calc(2.4 * var(--s));
-    background: #191919; border-radius: calc(1.2 * var(--s));
+    content: ""; width: calc(15 * var(--s)); height: calc(3.2 * var(--s));
+    background: #191919; border-radius: calc(1.6 * var(--s));
   }
   #row.editing .chip.custom .del { display: inline-flex; }
-  #row.editing .chip.custom { padding-left: calc(36 * var(--s)); }
+  #row.editing .chip.custom { padding-left: calc(46 * var(--s)); }
   #row.editing .chip { cursor: default; }
   #row.editing .chip:hover { transform: none; }
   #row.editing .chip .lbl { cursor: text; }
   #row.editing .chip.custom .swatch { display: inline-block; }
   .chip .swatch {
-    display: none; width: calc(13 * var(--s)); height: calc(13 * var(--s));
+    display: none; width: calc(20 * var(--s)); height: calc(20 * var(--s));
     border-radius: 50%; border: calc(1.6 * var(--s)) solid rgba(0,0,0,.28);
-    cursor: pointer; flex: none;
+    cursor: pointer; flex: none; padding: 0; background: none; -webkit-appearance: none; appearance: none;
+    overflow: hidden;
   }
+  .chip .swatch::-webkit-color-swatch-wrapper { padding: 0; }
+  .chip .swatch::-webkit-color-swatch { border: 0; border-radius: 50%; }
+  .chip .swatch::-moz-color-swatch { border: 0; border-radius: 50%; }
   #done {
-    display: none; flex: none; height: 100%; padding: 0 calc(22 * var(--s));
-    border: calc(1.73 * var(--s)) solid #191919; background: #fff; color: #191919;
-    font: 700 calc(15 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
-    border-radius: calc(18.5 * var(--s)); cursor: pointer;
+    display: none; flex: none; height: 100%; padding: 0 calc(28 * var(--s));
+    border: calc(2.34 * var(--s)) solid #191919; background: #fff; color: #191919;
+    font: 700 calc(20 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    border-radius: calc(25 * var(--s)); cursor: pointer;
   }
   #row.editing #done { display: inline-flex; align-items: center; }
 
   /* custom-time group */
-  #custom { flex: none; display: flex; align-items: center; gap: calc(9 * var(--s)); }
-  #clabel { font: 700 calc(13.5 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  #custom { flex: none; display: flex; align-items: center; gap: calc(13 * var(--s)); }
+  #clabel { font: 700 calc(19 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; }
   #track {
-    position: relative; width: calc(428 * var(--s)); height: calc(18 * var(--s));
+    position: relative; width: calc(400 * var(--s)); height: calc(32 * var(--s));
     border-radius: 999px; background: rgba(255,255,255,.76); cursor: pointer;
   }
   #fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: #fff; }
-  #cval { font: 400 calc(17 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; min-width: calc(38 * var(--s)); text-align: right; }
+  #cval { font: 400 calc(36 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; min-width: calc(74 * var(--s)); text-align: right; }
 
   @media (max-width: 620px) {
     #custom { display: none; }
@@ -185,12 +194,20 @@
 
   #emoji {
     position: absolute; z-index: 6; display: none;
-    background: #fff; border-radius: 14px; padding: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.45);
-    grid-template-columns: repeat(8, 1fr); gap: 2px;
+    background: #fff; border-radius: 14px; padding: 9px; box-shadow: 0 12px 34px rgba(0,0,0,.45);
+    width: 292px;
   }
-  #emoji.open { display: grid; }
-  #emoji button { border: 0; background: none; cursor: pointer; font-size: 19px; line-height: 1; padding: 5px; border-radius: 8px; }
-  #emoji button:hover { background: #eee; }
+  #emoji.open { display: block; }
+  #emoji input {
+    width: 100%; border: 1px solid #e0e0e0; border-radius: 9px; padding: 7px 9px;
+    font: 400 13px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000;
+    outline: none; margin-bottom: 7px;
+  }
+  #emoji input:focus { border-color: #24094A; }
+  #emoji .hint { font-size: 10.5px; color: #9a9a9a; margin: 0 2px 7px; }
+  #emoji .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; max-height: 176px; overflow-y: auto; }
+  #emoji .grid button { border: 0; background: none; cursor: pointer; font-size: 19px; line-height: 1; padding: 5px; border-radius: 8px; }
+  #emoji .grid button:hover { background: #eee; }
 </style>
 </head>
 <body>
@@ -236,7 +253,8 @@
       <div class="pfoot">
         <em>Space</em> start / pause &nbsp;·&nbsp; <em>R</em> reset &nbsp;·&nbsp; <em>I</em> invert &nbsp;·&nbsp;
         <em>Esc</em> dismiss the alarm &nbsp;·&nbsp; <em>+</em> in the row adds a shortcut — while editing,
-        the label types, the icon opens a picker, the dot cycles the colour.
+        the label and the minutes type in place, the icon opens a picker (or paste any emoji),
+        and the dot is a full colour picker.
       </div>
     </div>
   </div>
@@ -253,7 +271,11 @@
   <div id="drop"><em>Drop</em>AN IMAGE OR A SOUND</div>
 </div>
 
-<div id="emoji"></div>
+<div id="emoji">
+  <input id="emojiIn" type="text" placeholder="Type or paste any emoji…" autocomplete="off">
+  <div class="hint">macOS: <b>Ctrl Cmd Space</b> opens the full picker</div>
+  <div class="grid" id="emojiGrid"></div>
+</div>
 <input id="file"  type="file" accept="image/*">
 <input id="fileA" type="file" accept="audio/*">
 
@@ -326,7 +348,7 @@ function resize() {
   const box = wrap.getBoundingClientRect();
   const avail = Math.max(320, box.width - 24);
   // the row eats 56.5 design units of height below the card
-  scale = Math.min(avail / W, Math.max(140, window.innerHeight - 40) / (H + 56.5));
+  scale = Math.min(avail / W, Math.max(140, window.innerHeight - 40) / (H + 81));
   dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   for (const cnv of [cv, mask, tex]) {
     cnv.width  = Math.round(W * scale * dpr);
@@ -447,20 +469,23 @@ function fallbackImage() {
   const n = document.createElement("canvas");
   n.width = 1000; n.height = 300;
   const g = n.getContext("2d");
-  const grad = g.createLinearGradient(0, 0, 1000, 300);
-  grad.addColorStop(0.00, "#0b1540");
-  grad.addColorStop(0.30, "#4b2c7f");
-  grad.addColorStop(0.55, "#a8405e");
-  grad.addColorStop(0.78, "#e08b3a");
-  grad.addColorStop(1.00, "#f7dc8c");
+  const grad = g.createLinearGradient(0, 300, 1000, 0);
+  grad.addColorStop(0.00, "#131A5E");
+  grad.addColorStop(0.28, "#5B2E93");
+  grad.addColorStop(0.54, "#C43C6B");
+  grad.addColorStop(0.78, "#F0842F");
+  grad.addColorStop(1.00, "#FFD873");
   g.fillStyle = grad; g.fillRect(0, 0, 1000, 300);
-  for (let i = 0; i < 260; i++) {
-    g.globalAlpha = 0.04 + Math.random() * 0.08;
-    g.fillStyle = Math.random() > 0.5 ? "#fff" : "#000";
+  // a few big soft blobs for depth, kept sparse so the colour stays saturated
+  g.globalCompositeOperation = "overlay";
+  for (let i = 0; i < 14; i++) {
+    g.globalAlpha = 0.10 + Math.random() * 0.14;
+    g.fillStyle = i % 2 ? "#fff" : "#2A0F4A";
     g.beginPath();
-    g.arc(Math.random() * 1000, Math.random() * 300, 30 + Math.random() * 150, 0, Math.PI * 2);
+    g.arc(Math.random() * 1000, Math.random() * 300, 120 + Math.random() * 220, 0, Math.PI * 2);
     g.fill();
   }
+  g.globalCompositeOperation = "source-over";
   g.globalAlpha = 1;
   fallback = n;
   return n;
@@ -710,7 +735,10 @@ window.addEventListener("keydown", e => {
 const PALETTE = ["#90A3FF", "#E2B166", "#9AD8A6", "#F0A0B4", "#A6D9E8",
                  "#D3B4F2", "#EBD97C", "#F2A97E", "#8FD5C6", "#F5B8D0"];
 const EMOJI = ["📑","🧘","📚","💻","🧪","✍️","🎧","🏃","☕","🍅","🧠","🔬",
-               "📝","🎯","🌙","☀️","🎹","🗂","🧹","🛠","💤","🍽","📞","🧾"];
+               "📝","🎯","🌙","☀️","🎹","🗂","🧹","🛠","💤","🍽","📞","🧾",
+               "📐","📊","🗒","🔖","🧮","⌨️","🖊","📖","🎨","🎬","🏋️","🚿",
+               "🥗","🧺","🐢","🌱","🔥","⚡️","🌊","🏔","🧊","🕯","🪐","🛰",
+               "🎲","♟","🧩","🎸","🥁","🪄","🧿","🩺","💊","🧴","🪥","🧼"];
 
 /* Text sits on the chip's own hue: pushed dark when the background is
    light, pushed light when it's dark. */
@@ -791,27 +819,44 @@ function makeChip(c, index, custom) {
   el.appendChild(lbl);
 
   if (custom) {
+    /* Edited in place: prompt() is blocked inside Notion's sandboxed iframe. */
     const mins = document.createElement("span");
-    mins.className = "mins"; mins.textContent = c.minutes + "m";
+    mins.className = "mins";
+    mins.textContent = c.minutes + "m";
+    mins.addEventListener("pointerdown", ev => { if (S.editing) ev.stopPropagation(); });
     mins.addEventListener("click", ev => {
       if (!S.editing) return;
       ev.stopPropagation();
-      const v = prompt("Minutes for “" + c.name + "”", c.minutes);
-      const n = Math.max(1, Math.min(100, parseInt(v, 10) || c.minutes));
-      c.minutes = n; mins.textContent = n + "m"; saveSettings(); measureStrip();
+      if (mins.isContentEditable) return;
+      mins.contentEditable = "true";
+      mins.textContent = String(c.minutes);
+      mins.focus();
+      const r = document.createRange(); r.selectNodeContents(mins);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    });
+    mins.addEventListener("keydown", ev => {
+      ev.stopPropagation();
+      if (ev.key === "Enter" || ev.key === "Escape") { ev.preventDefault(); mins.blur(); }
+      else if (!/^[0-9]$/.test(ev.key) && !["Backspace","Delete","ArrowLeft","ArrowRight","Tab"].includes(ev.key) && !ev.metaKey && !ev.ctrlKey) ev.preventDefault();
+    });
+    mins.addEventListener("blur", () => {
+      const n = Math.max(1, Math.min(100, parseInt(mins.textContent, 10) || c.minutes));
+      c.minutes = n;
+      mins.contentEditable = "false";
+      mins.textContent = n + "m";
+      saveSettings(); measureStrip();
     });
     el.appendChild(mins);
 
-    const sw = document.createElement("span");
-    sw.className = "swatch";
-    sw.style.background = c.colour;
-    sw.addEventListener("click", ev => {
-      ev.stopPropagation();
-      const i = PALETTE.indexOf(c.colour);
-      c.colour = PALETTE[(i + 1) % PALETTE.length];
+    const sw = document.createElement("input");
+    sw.type = "color"; sw.className = "swatch"; sw.value = c.colour;
+    sw.title = "Any colour";
+    sw.addEventListener("click", ev => ev.stopPropagation());
+    sw.addEventListener("pointerdown", ev => ev.stopPropagation());
+    sw.addEventListener("input", () => {
+      c.colour = sw.value;
       el.style.background = c.colour;
-      el.style.color = inkFor(c.colour);
-      sw.style.background = c.colour;
+      el.style.color = inkFor(c.colour);   // label follows the hue automatically
       saveSettings();
     });
     el.appendChild(sw);
@@ -871,28 +916,48 @@ function measureStrip() {
 chipsEl.addEventListener("scroll", measureStrip);
 
 /* emoji picker */
-const emojiEl = document.getElementById("emoji");
+const emojiEl   = document.getElementById("emoji");
+const emojiIn   = document.getElementById("emojiIn");
+const emojiGrid = document.getElementById("emojiGrid");
+
+function applyEmoji(e) {
+  if (!e || !emojiEl.target) return;
+  emojiEl.target.chip.emoji = e;
+  emojiEl.target.el.textContent = e;
+  saveSettings(); measureStrip();
+  closeEmoji();
+}
+
 EMOJI.forEach(e => {
   const b = document.createElement("button");
   b.type = "button"; b.textContent = e;
-  b.addEventListener("click", ev => {
-    ev.stopPropagation();
-    if (emojiEl.target) {
-      emojiEl.target.chip.emoji = e;
-      emojiEl.target.el.textContent = e;
-      saveSettings(); measureStrip();
-    }
-    closeEmoji();
-  });
-  emojiEl.appendChild(b);
+  b.addEventListener("click", ev => { ev.stopPropagation(); applyEmoji(e); });
+  emojiGrid.appendChild(b);
 });
+
+/* The grid is a shortcut, not the whole set -- anything typed or pasted
+   into the field wins, so the OS picker covers everything else. */
+emojiIn.addEventListener("input", () => {
+  const v = [...emojiIn.value.trim()];
+  if (!v.length) return;
+  const glyph = /\p{Extended_Pictographic}/u.test(v[0]) && v.length > 1 ? emojiIn.value.trim() : v[0];
+  applyEmoji(glyph);
+});
+emojiIn.addEventListener("keydown", ev => {
+  ev.stopPropagation();
+  if (ev.key === "Enter") { ev.preventDefault(); applyEmoji(emojiIn.value.trim()); }
+  if (ev.key === "Escape") closeEmoji();
+});
+
 function openEmoji(el, chip) {
   const r = el.getBoundingClientRect();
   emojiEl.target = { el, chip };
   emojiEl.classList.add("open");
+  emojiIn.value = "";
   const w = emojiEl.offsetWidth, h = emojiEl.offsetHeight;
   emojiEl.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
-  emojiEl.style.top  = Math.max(8, r.top - h - 8) + "px";
+  emojiEl.style.top  = (r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8) + "px";
+  setTimeout(() => emojiIn.focus(), 0);
 }
 function closeEmoji() { emojiEl.classList.remove("open"); emojiEl.target = null; }
 emojiEl.addEventListener("pointerdown", e => e.stopPropagation());
