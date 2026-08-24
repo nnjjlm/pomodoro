@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pomodoro</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f%5B%5D=zodiak@400,401&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #191919; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  /* --s is one design unit in px; every size below is written in those units,
+     so the whole thing scales as one piece. */
+  #wrap { position: relative; width: 100%; max-width: 1248px; padding: 12px; --s: 1px; }
+  #cardwrap { position: relative; }
+  canvas { display: block; width: 100%; height: auto; touch-action: none; outline: none; }
+
+  /* ---- hover trigger ---------------------------------------------- */
+  #tools {
+    position: absolute; top: calc(20 * var(--s)); right: calc(22 * var(--s)); z-index: 3;
+    opacity: 0; transform: translateY(-3px);
+    transition: opacity .2s ease, transform .2s ease; pointer-events: none;
+  }
+  #cardwrap:hover #tools, #tools:focus-within { opacity: 1; transform: none; pointer-events: auto; }
+  body.panel-open #tools { opacity: 0; pointer-events: none; }
+  #btnPanel {
+    border: 0; border-radius: 999px; cursor: pointer; background: #fff; color: #000;
+    padding: 8px 15px; font: 400 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    box-shadow: 0 1px 6px rgba(0,0,0,.16); transition: transform .14s ease, box-shadow .14s ease;
+  }
+  #btnPanel i { font-family: Zodiak, Georgia, serif; font-style: italic; font-size: 14px; margin-right: 5px; color: #24094A; }
+  #btnPanel:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.22); }
+
+  /* ---- panel ------------------------------------------------------- */
+  #panel {
+    position: absolute; inset: 0; z-index: 2;
+    background: #fff; border-radius: calc(29.5 * var(--s));
+    padding: 20px 26px 16px; color: #000;
+    display: flex; flex-direction: column; gap: 12px; overflow: auto;
+    box-shadow: 0 20px 55px rgba(0,0,0,.5);
+    opacity: 0; transform: translateY(-12px) scale(.985); transform-origin: 50% 0;
+    transition: opacity .18s ease, transform .18s ease; pointer-events: none;
+  }
+  body.panel-open #panel { opacity: 1; transform: none; pointer-events: auto; }
+  .phead { display: flex; align-items: baseline; justify-content: space-between; }
+  .phead b { font: 400 20px/1 Zodiak, Georgia, serif; font-style: italic; color: #24094A; }
+  .phead b span { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-style: normal; font-size: 17px; color: #000; margin-left: 6px; }
+  #btnClose { border: 0; background: none; cursor: pointer; color: #9a9a9a; font: 400 22px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 0 2px; }
+  #btnClose:hover { color: #000; }
+  .pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 30px; flex: 1; align-content: start; }
+  .sec { min-width: 0; }
+  .sec h4 { margin: 0 0 11px; font: 400 15px/1 Zodiak, Georgia, serif; font-style: italic; color: var(--acc); }
+  .prow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; font-size: 12.5px; min-width: 0; }
+  .prow > span { white-space: nowrap; }
+  .name { font-size: 11.5px; color: #7c7c7c; margin: -4px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sw { position: relative; width: 36px; height: 20px; border-radius: 999px; background: #dcdcdc; border: 0; cursor: pointer; flex: none; transition: background .16s ease; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .16s ease; }
+  .sw.on { background: var(--acc); }
+  .sw.on::after { transform: translateX(16px); }
+  .mini { border: 0; border-radius: 999px; background: #efefef; color: #000; font: 400 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+  .mini:hover { background: #e3e3e3; }
+  .mini.accent { background: var(--acc); color: #fff; }
+  .mini.accent:hover { filter: brightness(1.25); }
+  #panel input[type=range] { -webkit-appearance: none; appearance: none; width: 96px; height: 6px; border-radius: 3px; background: #dcdcdc; flex: none; }
+  #panel input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--acc); cursor: pointer; }
+  #panel input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--acc); cursor: pointer; }
+  .pfoot { font-size: 11px; color: #9a9a9a; letter-spacing: .02em; }
+  .pfoot em { font-family: Zodiak, Georgia, serif; font-style: italic; color: #6a6a6a; }
+  @media (max-width: 760px) { .pgrid { grid-template-columns: 1fr; gap: 2px; } .pfoot { display: none; } }
+
+  /* ---- control row ------------------------------------------------- */
+  /* Sizes traced from the Affinity export: 35 tall becomes 37 design
+     units once the 1157-wide row is scaled to the card's 1222.        */
+  #row {
+    display: flex; align-items: center;
+    gap: calc(24 * var(--s));
+    margin-top: calc(19.5 * var(--s));
+    height: calc(37 * var(--s));
+  }
+
+  #strip { position: relative; flex: 1 1 auto; min-width: 0; height: 100%; }
+  #chips {
+    display: flex; align-items: center; gap: calc(20 * var(--s));
+    height: 100%; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  #chips::-webkit-scrollbar { display: none; }
+  #strip.fadeL #chips { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 100%); mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 100%); }
+  #strip.fadeR #chips { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 50 * var(--s)), transparent 100%); mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 50 * var(--s)), transparent 100%); }
+  #strip.fadeL.fadeR #chips { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 calc(100% - 50 * var(--s)), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 calc(100% - 50 * var(--s)), transparent 100%); }
+
+  /* The cap sits on the right for even chips and on the left for odd ones,
+     so the row reads as an alternating sequence. */
+  .chip {
+    position: relative; flex: none; height: 100%;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: calc(8 * var(--s));
+    padding: 0 calc(42 * var(--s));
+    border: calc(1.73 * var(--s)) solid #191919;
+    background: #fff; color: #191919;
+    font: 700 calc(16 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    white-space: nowrap; cursor: pointer;
+    border-radius: calc(18.5 * var(--s)) calc(18.5 * var(--s)) calc(18.5 * var(--s)) 0;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .chip.flip { border-radius: calc(18.5 * var(--s)) calc(18.5 * var(--s)) 0 calc(18.5 * var(--s)); }
+  .chip:hover { transform: translateY(calc(-1.5 * var(--s))); }
+  .chip.active { box-shadow: inset 0 0 0 calc(2.6 * var(--s)) currentColor; }
+  .chip .emo { font-size: calc(16 * var(--s)); line-height: 1; }
+  .chip .lbl { outline: none; }
+  .chip .mins { opacity: .55; font-weight: 400; }
+
+  #add {
+    flex: none; width: calc(29.6 * var(--s)); height: calc(28.5 * var(--s));
+    border: 0; cursor: pointer;
+    background: rgba(255,255,255,.76); color: #191919;
+    border-radius: calc(6 * var(--s)) 0 calc(6 * var(--s)) 0;
+    font: 400 calc(20 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #add:hover { background: #fff; }
+
+  /* edit state */
+  .chip .del {
+    display: none; position: absolute; left: calc(5 * var(--s)); top: 50%;
+    transform: translateY(-50%);
+    width: calc(24 * var(--s)); height: calc(24 * var(--s));
+    border: 0; border-radius: 50%; background: #fff; cursor: pointer;
+    align-items: center; justify-content: center; padding: 0;
+  }
+  .chip .del::before {
+    content: ""; width: calc(11 * var(--s)); height: calc(2.4 * var(--s));
+    background: #191919; border-radius: calc(1.2 * var(--s));
+  }
+  #row.editing .chip.custom .del { display: inline-flex; }
+  #row.editing .chip.custom { padding-left: calc(36 * var(--s)); }
+  #row.editing .chip { cursor: default; }
+  #row.editing .chip:hover { transform: none; }
+  #row.editing .chip .lbl { cursor: text; }
+  #row.editing .chip.custom .swatch { display: inline-block; }
+  .chip .swatch {
+    display: none; width: calc(13 * var(--s)); height: calc(13 * var(--s));
+    border-radius: 50%; border: calc(1.6 * var(--s)) solid rgba(0,0,0,.28);
+    cursor: pointer; flex: none;
+  }
+  #done {
+    display: none; flex: none; height: 100%; padding: 0 calc(22 * var(--s));
+    border: calc(1.73 * var(--s)) solid #191919; background: #fff; color: #191919;
+    font: 700 calc(15 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    border-radius: calc(18.5 * var(--s)); cursor: pointer;
+  }
+  #row.editing #done { display: inline-flex; align-items: center; }
+
+  /* custom-time group */
+  #custom { flex: none; display: flex; align-items: center; gap: calc(9 * var(--s)); }
+  #clabel { font: 700 calc(13.5 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  #track {
+    position: relative; width: calc(428 * var(--s)); height: calc(18 * var(--s));
+    border-radius: 999px; background: rgba(255,255,255,.76); cursor: pointer;
+  }
+  #fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: #fff; }
+  #cval { font: 400 calc(17 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; min-width: calc(38 * var(--s)); text-align: right; }
+
+  @media (max-width: 620px) {
+    #custom { display: none; }
+  }
+
+  #drop {
+    position: absolute; inset: 12px; border-radius: 30px; z-index: 4;
+    border: 2px dashed rgba(255,255,255,.55); background: rgba(0,0,0,.42);
+    display: none; align-items: center; justify-content: center;
+    color: #fff; font: 400 16px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: .1em; pointer-events: none;
+  }
+  #drop em { font-family: Zodiak, Georgia, serif; font-style: italic; margin-right: 7px; letter-spacing: 0; }
+  body.dragging #drop { display: flex; }
+  input[type=file] { display: none; }
+
+  #emoji {
+    position: absolute; z-index: 6; display: none;
+    background: #fff; border-radius: 14px; padding: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.45);
+    grid-template-columns: repeat(8, 1fr); gap: 2px;
+  }
+  #emoji.open { display: grid; }
+  #emoji button { border: 0; background: none; cursor: pointer; font-size: 19px; line-height: 1; padding: 5px; border-radius: 8px; }
+  #emoji button:hover { background: #eee; }
+</style>
+</head>
+<body>
+
+<div id="wrap">
+  <div id="cardwrap">
+    <canvas id="c" tabindex="0" aria-label="Pomodoro timer"></canvas>
+    <div id="tools">
+      <button id="btnPanel" type="button" aria-expanded="false"><i>Customise</i>Card</button>
+    </div>
+    <div id="panel" role="dialog" aria-label="Customise">
+      <div class="phead">
+        <b>Customise<span>the card</span></b>
+        <button id="btnClose" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="pgrid">
+        <div class="sec" style="--acc:#24094A">
+          <h4>Card</h4>
+          <div class="prow"><span>Invert</span><button class="sw" id="swInv" type="button"></button></div>
+          <div class="prow"><span>Auto-darken</span><button class="sw on" id="swDim" type="button"></button></div>
+          <div class="prow"><span>Chime volume</span><input id="vol" type="range" min="0" max="100" value="80"></div>
+        </div>
+        <div class="sec" style="--acc:#001697">
+          <h4>Image</h4>
+          <div class="prow">
+            <button class="mini accent" id="pImg" type="button">Choose file</button>
+            <button class="mini" id="pImgClear" type="button">Clear</button>
+          </div>
+          <div class="name" id="imgName">Default gradient</div>
+          <div class="pfoot">Or drop one anywhere on the card.</div>
+        </div>
+        <div class="sec" style="--acc:#945F00">
+          <h4>Alarm</h4>
+          <div class="prow">
+            <button class="mini accent" id="pRing" type="button">Choose sound</button>
+            <button class="mini" id="pRingClear" type="button">Clear</button>
+          </div>
+          <div class="name" id="ringName">Built-in chime</div>
+          <div class="prow"><span>Loop until dismissed</span><button class="sw on" id="swLoop" type="button"></button></div>
+          <div class="prow"><span>Preview</span><button class="mini" id="pTest" type="button">Play</button></div>
+        </div>
+      </div>
+      <div class="pfoot">
+        <em>Space</em> start / pause &nbsp;·&nbsp; <em>R</em> reset &nbsp;·&nbsp; <em>I</em> invert &nbsp;·&nbsp;
+        <em>Esc</em> dismiss the alarm &nbsp;·&nbsp; <em>+</em> in the row adds a shortcut — while editing,
+        the label types, the icon opens a picker, the dot cycles the colour.
+      </div>
+    </div>
+  </div>
+
+  <div id="row">
+    <div id="strip"><div id="chips"></div></div>
+    <div id="custom">
+      <span id="clabel">custom Time</span>
+      <div id="track"><div id="fill"></div></div>
+      <span id="cval">25</span>
+    </div>
+  </div>
+
+  <div id="drop"><em>Drop</em>AN IMAGE OR A SOUND</div>
+</div>
+
+<div id="emoji"></div>
+<input id="file"  type="file" accept="image/*">
+<input id="fileA" type="file" accept="audio/*">
+
+<script>
+(() => {
+"use strict";
+
+/* ==================================================================
+   Card geometry. Every number and both checkerboard paths are lifted
+   straight out of the Affinity export, so the card is 1:1 with the
+   artwork. The control row underneath is DOM, sized in the same units.
+   ================================================================== */
+
+const W = 1224, H = 335;
+
+const CARD = { x: 2, y: 0, w: 1222, h: 335, r: 29.5 };
+const BAR  = { x: 2, y: 293.9, h: 41.1, full: 1222 };
+const DOT  = { x0: 152, y0: 120, pitch: 10.555556, r: 5.279 };
+
+const CHK_LEFT  = new Path2D("M81.48,188.63C81.48,187.52 80.59,186.63 79.48,186.63L69.42,186.63C68.32,186.63 67.42,187.52 67.42,188.63L67.42,207.76L50.29,207.76L50.29,188.63C50.29,187.52 49.40,186.63 48.29,186.63L37.23,186.63C36.12,186.63 35.23,187.52 35.23,188.63L35.23,207.76L18.10,207.76L18.10,188.63C18.10,187.52 17.20,186.63 16.10,186.63L2.00,186.63L2.00,169.50L16.10,169.50C17.20,169.50 18.10,168.61 18.10,167.50L18.10,146.37C18.10,145.27 17.20,144.37 16.10,144.37L2.00,144.37L2.00,127.24L19.13,127.24L19.13,146.37C19.13,147.48 20.02,148.37 21.13,148.37L32.20,148.37C33.30,148.37 34.20,147.48 34.20,146.37L34.20,127.24L51.32,127.24L51.32,146.37C51.32,147.48 52.22,148.37 53.32,148.37L64.39,148.37C65.50,148.37 66.39,147.48 66.39,146.37L66.39,127.24L83.52,127.24L83.52,146.37C83.52,147.48 84.41,148.37 85.52,148.37L95.58,148.37C96.68,148.37 97.58,147.48 97.58,146.37L97.58,127.24L114.71,127.24L114.71,144.37L100.61,144.37C99.51,144.37 98.61,145.27 98.61,146.37L98.61,167.50C98.61,168.61 99.51,169.50 100.61,169.50L114.71,169.50L114.71,186.63L100.61,186.63C99.51,186.63 98.61,187.52 98.61,188.63L98.61,207.76L81.48,207.76L81.48,188.63ZM48.29,169.50C49.40,169.50 50.29,168.61 50.29,167.50L50.29,146.37C50.29,145.27 49.40,144.37 48.29,144.37L37.23,144.37C36.12,144.37 35.23,145.27 35.23,146.37L35.23,167.50C35.23,168.61 36.12,169.50 37.23,169.50L48.29,169.50ZM69.42,144.37C68.32,144.37 67.42,145.27 67.42,146.37L67.42,167.50C67.42,168.61 68.32,169.50 69.42,169.50L79.48,169.50C80.59,169.50 81.48,168.61 81.48,167.50L81.48,146.37C81.48,145.27 80.59,144.37 79.48,144.37L69.42,144.37ZM21.13,165.50C20.02,165.50 19.13,166.40 19.13,167.50L19.13,188.63C19.13,189.73 20.02,190.63 21.13,190.63L32.20,190.63C33.30,190.63 34.20,189.73 34.20,188.63L34.20,167.50C34.20,166.40 33.30,165.50 32.20,165.50L21.13,165.50ZM95.58,190.63C96.68,190.63 97.58,189.73 97.58,188.63L97.58,167.50C97.58,166.40 96.68,165.50 95.58,165.50L85.52,165.50C84.41,165.50 83.52,166.40 83.52,167.50L83.52,188.63C83.52,189.73 84.41,190.63 85.52,190.63L95.58,190.63ZM64.39,190.63C65.50,190.63 66.39,189.73 66.39,188.63L66.39,167.50C66.39,166.40 65.50,165.50 64.39,165.50L53.32,165.50C52.22,165.50 51.32,166.40 51.32,167.50L51.32,188.63C51.32,189.73 52.22,190.63 53.32,190.63L64.39,190.63Z");
+const CHK_RIGHT = new Path2D("M1222.00,175.81L1206.90,175.81C1205.80,175.81 1204.90,176.70 1204.90,177.81L1204.90,198.94C1204.90,200.04 1205.80,200.94 1206.90,200.94L1221.00,200.94L1221.00,218.06L1206.90,218.06C1205.80,218.06 1204.90,218.96 1204.90,220.06L1204.90,239.19C1204.90,240.30 1205.80,241.19 1206.90,241.19L1221.62,241.19L1221.62,258.32L1204.49,258.32L1204.49,241.19C1204.49,240.09 1203.59,239.19 1202.49,239.19L1191.62,239.19C1190.51,239.19 1189.62,240.09 1189.62,241.19L1189.62,258.32L1172.49,258.32L1172.49,241.19C1172.49,240.09 1171.59,239.19 1170.49,239.19L1159.62,239.19C1158.51,239.19 1157.62,240.09 1157.62,241.19L1157.62,258.32L1140.49,258.32L1140.49,241.19C1140.49,240.09 1139.59,239.19 1138.49,239.19L1127.42,239.19C1126.32,239.19 1125.42,240.09 1125.42,241.19L1125.42,259.32L1108.03,259.32C1107.89,259.09 1107.71,258.88 1107.49,258.72L1107.49,242.19C1107.49,241.09 1106.59,240.19 1105.49,240.19L1094.71,240.19C1093.60,240.19 1092.71,241.09 1092.71,242.19L1092.71,259.32L1075.58,259.32L1075.58,242.19C1075.58,241.09 1074.68,240.19 1073.58,240.19L1063.42,240.19C1062.32,240.19 1061.42,241.09 1061.42,242.19L1061.42,259.32L1044.29,259.32L1044.29,242.19C1044.29,241.09 1043.40,240.19 1042.29,240.19L1030.42,240.19C1029.32,240.19 1028.42,241.09 1028.42,242.19L1028.42,259.32L1011.29,259.32L1011.29,242.19L1026.20,242.19C1027.30,242.19 1028.20,241.30 1028.20,240.19L1028.20,221.06C1028.20,219.96 1027.30,219.06 1026.20,219.06L1012.10,219.06L1012.10,201.94L1026.20,201.94C1027.30,201.94 1028.20,201.04 1028.20,199.94L1028.20,179.32C1028.20,178.22 1027.30,177.32 1026.20,177.32L1011.87,177.32L1011.87,159.68L1026.77,159.68C1027.88,159.68 1028.77,158.79 1028.77,157.68L1028.77,139.06C1028.77,137.96 1027.88,137.06 1026.77,137.06L1012.68,137.06L1012.68,119.94L1026.77,119.94C1027.88,119.94 1028.77,119.04 1028.77,117.94L1028.77,96.81C1028.77,95.70 1027.88,94.81 1026.77,94.81L1012.68,94.81L1012.68,77.68L1029.81,77.68L1029.81,96.81C1029.81,97.91 1030.70,98.81 1031.81,98.81L1042.87,98.81C1043.98,98.81 1044.87,97.91 1044.87,96.81L1044.87,77.68L1062.00,77.68L1062.00,96.81C1062.00,97.91 1062.90,98.81 1064.00,98.81L1075.07,98.81C1076.17,98.81 1077.07,97.91 1077.07,96.81L1077.07,77.68L1094.20,77.68L1094.20,96.81C1094.20,97.91 1095.09,98.81 1096.20,98.81L1106.26,98.81C1107.36,98.81 1108.26,97.91 1108.26,96.81L1108.26,76.91C1108.52,76.57 1108.68,76.14 1108.68,75.68L1125.80,75.68L1125.80,94.81C1125.80,95.91 1126.70,96.81 1127.81,96.81L1138.87,96.81C1139.98,96.81 1140.87,95.91 1140.87,94.81L1140.87,75.68L1158.00,75.68L1158.00,94.81C1158.00,95.91 1158.90,96.81 1160.00,96.81L1171.07,96.81C1172.17,96.81 1173.07,95.91 1173.07,94.81L1173.07,75.68L1190.20,75.68L1190.20,94.81C1190.20,95.91 1191.09,96.81 1192.20,96.81L1202.26,96.81C1203.36,96.81 1204.26,95.91 1204.26,94.81L1204.26,75.68L1221.38,75.68L1221.38,92.81L1207.29,92.81C1206.18,92.81 1205.29,93.70 1205.29,94.81L1205.29,115.94C1205.29,117.04 1206.18,117.94 1207.29,117.94L1221.38,117.94L1221.38,135.06L1207.29,135.06C1206.18,135.06 1205.29,135.96 1205.29,137.06L1205.29,156.19C1205.29,157.30 1206.18,158.19 1207.29,158.19L1222.00,158.19L1222.00,175.81ZM1154.97,158.19C1156.07,158.19 1156.97,157.30 1156.97,156.19L1156.97,137.06C1156.97,135.96 1156.07,135.06 1154.97,135.06L1143.90,135.06C1142.80,135.06 1141.90,135.96 1141.90,137.06L1141.90,156.19C1141.90,157.30 1142.80,158.19 1143.90,158.19L1154.97,158.19ZM1154.59,200.94C1155.69,200.94 1156.59,200.04 1156.59,198.94L1156.59,177.81C1156.59,176.70 1155.69,175.81 1154.59,175.81L1143.52,175.81C1142.41,175.81 1141.52,176.70 1141.52,177.81L1141.52,198.94C1141.52,200.04 1142.41,200.94 1143.52,200.94L1154.59,200.94ZM1108.71,239.19C1108.71,240.30 1109.60,241.19 1110.71,241.19L1122.39,241.19C1123.49,241.19 1124.39,240.30 1124.39,239.19L1124.39,221.06C1124.39,219.96 1123.49,219.06 1122.39,219.06L1110.71,219.06C1109.60,219.06 1108.71,219.96 1108.71,221.06L1108.71,239.19ZM1047.32,177.32C1046.22,177.32 1045.32,178.22 1045.32,179.32L1045.32,199.94C1045.32,201.04 1046.22,201.94 1047.32,201.94L1058.39,201.94C1059.50,201.94 1060.39,201.04 1060.39,199.94L1060.39,179.32C1060.39,178.22 1059.50,177.32 1058.39,177.32L1047.32,177.32ZM1029.23,221.06C1029.23,222.17 1030.12,223.06 1031.23,223.06L1042.29,223.06C1043.40,223.06 1044.29,222.17 1044.29,221.06L1044.29,199.94C1044.29,198.83 1043.40,197.94 1042.29,197.94L1031.23,197.94C1030.12,197.94 1029.23,198.83 1029.23,199.94L1029.23,221.06ZM1173.71,198.94C1173.71,200.04 1174.61,200.94 1175.71,200.94L1185.77,200.94C1186.88,200.94 1187.77,200.04 1187.77,198.94L1187.77,177.81C1187.77,176.70 1186.88,175.81 1185.77,175.81L1175.71,175.81C1174.61,175.81 1173.71,176.70 1173.71,177.81L1173.71,198.94ZM1111.29,94.81C1110.18,94.81 1109.29,95.70 1109.29,96.81L1109.29,115.94C1109.29,117.04 1110.18,117.94 1111.29,117.94L1122.77,117.94C1123.88,117.94 1124.77,117.04 1124.77,115.94L1124.77,96.81C1124.77,95.70 1123.88,94.81 1122.77,94.81L1111.29,94.81ZM1078.10,117.94C1078.10,119.04 1078.99,119.94 1080.10,119.94L1090.16,119.94C1091.26,119.94 1092.16,119.04 1092.16,117.94L1092.16,96.81C1092.16,95.70 1091.26,94.81 1090.16,94.81L1080.10,94.81C1078.99,94.81 1078.10,95.70 1078.10,96.81L1078.10,117.94ZM1089.58,242.19C1090.68,242.19 1091.58,241.30 1091.58,240.19L1091.58,221.06C1091.58,219.96 1090.68,219.06 1089.58,219.06L1079.52,219.06C1078.41,219.06 1077.52,219.96 1077.52,221.06L1077.52,240.19C1077.52,241.30 1078.41,242.19 1079.52,242.19L1089.58,242.19ZM1029.81,139.06C1029.81,140.17 1030.70,141.06 1031.81,141.06L1042.87,141.06C1043.98,141.06 1044.87,140.17 1044.87,139.06L1044.87,117.94C1044.87,116.83 1043.98,115.94 1042.87,115.94L1031.81,115.94C1030.70,115.94 1029.81,116.83 1029.81,117.94L1029.81,139.06ZM1079.52,176.81C1078.41,176.81 1077.52,177.70 1077.52,178.81L1077.52,199.94C1077.52,201.04 1078.41,201.94 1079.52,201.94L1089.58,201.94C1090.68,201.94 1091.58,201.04 1091.58,199.94L1091.58,178.81C1091.58,177.70 1090.68,176.81 1089.58,176.81L1079.52,176.81ZM1188.16,137.06C1188.16,135.96 1187.26,135.06 1186.16,135.06L1176.10,135.06C1174.99,135.06 1174.10,135.96 1174.10,137.06L1174.10,156.68C1174.10,157.79 1174.99,158.68 1176.10,158.68L1186.16,158.68C1187.26,158.68 1188.16,157.79 1188.16,156.68L1188.16,137.06ZM1106.26,141.06C1107.36,141.06 1108.26,140.17 1108.26,139.06L1108.26,117.94C1108.26,116.83 1107.36,115.94 1106.26,115.94L1096.20,115.94C1095.09,115.94 1094.20,116.83 1094.20,117.94L1094.20,139.06C1094.20,140.17 1095.09,141.06 1096.20,141.06L1106.26,141.06ZM1058.97,119.94C1060.07,119.94 1060.97,119.04 1060.97,117.94L1060.97,96.81C1060.97,95.70 1060.07,94.81 1058.97,94.81L1047.90,94.81C1046.80,94.81 1045.90,95.70 1045.90,96.81L1045.90,117.94C1045.90,119.04 1046.80,119.94 1047.90,119.94L1058.97,119.94ZM1109.29,156.19C1109.29,157.30 1110.18,158.19 1111.29,158.19L1122.77,158.19C1123.88,158.19 1124.77,157.30 1124.77,156.19L1124.77,139.06C1124.77,137.96 1123.88,137.06 1122.77,137.06L1111.29,137.06C1110.18,137.06 1109.29,137.96 1109.29,139.06L1109.29,156.19ZM1095.62,158.19C1094.51,158.19 1093.62,159.09 1093.62,160.19L1093.62,178.81C1093.62,179.91 1094.51,180.81 1095.62,180.81L1105.68,180.81C1106.78,180.81 1107.68,179.91 1107.68,178.81L1107.68,160.19C1107.68,159.09 1106.78,158.19 1105.68,158.19L1095.62,158.19ZM1092.16,139.06C1092.16,137.96 1091.26,137.06 1090.16,137.06L1080.10,137.06C1078.99,137.06 1078.10,137.96 1078.10,139.06L1078.10,157.68C1078.10,158.79 1078.99,159.68 1080.10,159.68L1090.16,159.68C1091.26,159.68 1092.16,158.79 1092.16,157.68L1092.16,139.06ZM1074.49,223.06C1075.59,223.06 1076.49,222.17 1076.49,221.06L1076.49,199.94C1076.49,198.83 1075.59,197.94 1074.49,197.94L1063.42,197.94C1062.32,197.94 1061.42,198.83 1061.42,199.94L1061.42,221.06C1061.42,222.17 1062.32,223.06 1063.42,223.06L1074.49,223.06ZM1176.10,92.81C1174.99,92.81 1174.10,93.70 1174.10,94.81L1174.10,115.94C1174.10,117.04 1174.99,117.94 1176.10,117.94L1186.16,117.94C1187.26,117.94 1188.16,117.04 1188.16,115.94L1188.16,94.81C1188.16,93.70 1187.26,92.81 1186.16,92.81L1176.10,92.81ZM1075.07,141.06C1076.17,141.06 1077.07,140.17 1077.07,139.06L1077.07,117.94C1077.07,116.83 1076.17,115.94 1075.07,115.94L1064.00,115.94C1062.90,115.94 1062.00,116.83 1062.00,117.94L1062.00,139.06C1062.00,140.17 1062.90,141.06 1064.00,141.06L1075.07,141.06ZM1191.81,156.19C1190.71,156.19 1189.81,157.09 1189.81,158.19L1189.81,177.81C1189.81,178.91 1190.71,179.81 1191.81,179.81L1201.87,179.81C1202.98,179.81 1203.87,178.91 1203.87,177.81L1203.87,158.19C1203.87,157.09 1202.98,156.19 1201.87,156.19L1191.81,156.19ZM1187.77,220.06C1187.77,218.96 1186.88,218.06 1185.77,218.06L1175.71,218.06C1174.61,218.06 1173.71,218.96 1173.71,220.06L1173.71,239.19C1173.71,240.30 1174.61,241.19 1175.71,241.19L1185.77,241.19C1186.88,241.19 1187.77,240.30 1187.77,239.19L1187.77,220.06ZM1154.97,117.94C1156.07,117.94 1156.97,117.04 1156.97,115.94L1156.97,94.81C1156.97,93.70 1156.07,92.81 1154.97,92.81L1143.90,92.81C1142.80,92.81 1141.90,93.70 1141.90,94.81L1141.90,115.94C1141.90,117.04 1142.80,117.94 1143.90,117.94L1154.97,117.94ZM1105.68,223.06C1106.78,223.06 1107.68,222.17 1107.68,221.06L1107.68,199.94C1107.68,198.83 1106.78,197.94 1105.68,197.94L1095.62,197.94C1094.51,197.94 1093.62,198.83 1093.62,199.94L1093.62,221.06C1093.62,222.17 1094.51,223.06 1095.62,223.06L1105.68,223.06ZM1125.80,137.06C1125.80,138.17 1126.70,139.06 1127.81,139.06L1138.87,139.06C1139.98,139.06 1140.87,138.17 1140.87,137.06L1140.87,115.94C1140.87,114.83 1139.98,113.94 1138.87,113.94L1127.81,113.94C1126.70,113.94 1125.80,114.83 1125.80,115.94L1125.80,137.06ZM1170.68,222.06C1171.79,222.06 1172.68,221.17 1172.68,220.06L1172.68,198.94C1172.68,197.83 1171.79,196.94 1170.68,196.94L1159.62,196.94C1158.51,196.94 1157.62,197.83 1157.62,198.94L1157.62,220.06C1157.62,221.17 1158.51,222.06 1159.62,222.06L1170.68,222.06ZM1062.00,178.81C1062.00,179.91 1062.90,180.81 1064.00,180.81L1074.49,180.81C1075.59,180.81 1076.49,179.91 1076.49,178.81L1076.49,160.19C1076.49,159.09 1075.59,158.19 1074.49,158.19L1064.00,158.19C1062.90,158.19 1062.00,159.09 1062.00,160.19L1062.00,178.81ZM1158.05,177.77L1157.62,177.33L1157.62,177.80L1159.62,179.81L1170.68,179.81C1171.79,179.81 1172.68,178.91 1172.68,177.81L1172.68,158.19C1172.68,157.09 1171.79,156.19 1170.68,156.19L1160.00,156.19C1158.90,156.19 1158.00,157.09 1158.00,158.19L1158.00,177.32C1158.00,177.47 1158.02,177.62 1158.05,177.77ZM1159.62,179.32L1159.57,179.27L1159.62,179.28L1159.62,179.32ZM1154.59,241.19C1155.69,241.19 1156.59,240.30 1156.59,239.19L1156.59,220.06C1156.59,218.96 1155.69,218.06 1154.59,218.06L1143.52,218.06C1142.41,218.06 1141.52,218.96 1141.52,220.06L1141.52,239.19C1141.52,240.30 1142.41,241.19 1143.52,241.19L1154.59,241.19ZM1045.90,157.68C1045.90,158.79 1046.80,159.68 1047.90,159.68L1058.97,159.68C1060.07,159.68 1060.97,158.79 1060.97,157.68L1060.97,139.06C1060.97,137.96 1060.07,137.06 1058.97,137.06L1047.90,137.06C1046.80,137.06 1045.90,137.96 1045.90,139.06L1045.90,157.68ZM1201.87,222.06C1202.98,222.06 1203.87,221.17 1203.87,220.06L1203.87,198.94C1203.87,197.83 1202.98,196.94 1201.87,196.94L1191.81,196.94C1190.71,196.94 1189.81,197.83 1189.81,198.94L1189.81,220.06C1189.81,221.17 1190.71,222.06 1191.81,222.06L1201.87,222.06ZM1125.42,220.06C1125.42,221.17 1126.32,222.06 1127.42,222.06L1138.49,222.06C1139.59,222.06 1140.49,221.17 1140.49,220.06L1140.49,198.94C1140.49,197.83 1139.59,196.94 1138.49,196.94L1127.42,196.94C1126.32,196.94 1125.42,197.83 1125.42,198.94L1125.42,220.06ZM1110.71,177.32C1109.60,177.32 1108.71,178.22 1108.71,179.32L1108.71,198.94C1108.71,200.04 1109.60,200.94 1110.71,200.94L1122.39,200.94C1123.49,200.94 1124.39,200.04 1124.39,198.94L1124.39,179.32C1124.39,178.22 1123.49,177.32 1122.39,177.32L1110.71,177.32ZM1126.00,177.81C1126.00,178.91 1126.90,179.81 1128.00,179.81L1138.49,179.81C1139.59,179.81 1140.49,178.91 1140.49,177.81L1140.49,158.19C1140.49,157.09 1139.59,156.19 1138.49,156.19L1128.00,156.19C1126.90,156.19 1126.00,157.09 1126.00,158.19L1126.00,177.81ZM1202.26,139.06C1203.36,139.06 1204.26,138.17 1204.26,137.06L1204.26,115.94C1204.26,114.83 1203.36,113.94 1202.26,113.94L1192.20,113.94C1191.09,113.94 1190.20,114.83 1190.20,115.94L1190.20,137.06C1190.20,138.17 1191.09,139.06 1192.20,139.06L1202.26,139.06ZM1058.39,242.19C1059.50,242.19 1060.39,241.30 1060.39,240.19L1060.39,221.06C1060.39,219.96 1059.50,219.06 1058.39,219.06L1047.32,219.06C1046.22,219.06 1045.32,219.96 1045.32,221.06L1045.32,240.19C1045.32,241.30 1046.22,242.19 1047.32,242.19L1058.39,242.19ZM1158.00,137.06C1158.00,138.17 1158.90,139.06 1160.00,139.06L1171.07,139.06C1172.17,139.06 1173.07,138.17 1173.07,137.06L1173.07,115.94C1173.07,114.83 1172.17,113.94 1171.07,113.94L1160.00,113.94C1158.90,113.94 1158.00,114.83 1158.00,115.94L1158.00,137.06ZM1031.23,158.19C1030.12,158.19 1029.23,159.09 1029.23,160.19L1029.23,178.81C1029.23,179.91 1030.12,180.81 1031.23,180.81L1042.29,180.81C1043.40,180.81 1044.29,179.91 1044.29,178.81L1044.29,160.19C1044.29,159.09 1043.40,158.19 1042.29,158.19L1031.23,158.19Z");
+
+const PLAY = { col: 58.5, cols: 6, rows: 10 };
+const PLAY_BOX = {
+  x: DOT.x0 + PLAY.col * DOT.pitch - DOT.r - 18,
+  y: DOT.y0 - DOT.r - 18,
+  w: (PLAY.cols - 1) * DOT.pitch + DOT.r * 2 + 36,
+  h: (PLAY.rows - 1) * DOT.pitch + DOT.r * 2 + 36
+};
+
+const POMO = { x: 36, top: 38, w: 201 };
+
+const C = { page: "#191919", card: "#EBEBEB", pomo: "#24094A" };
+const SERIF = 'italic 400 SIZEpx Zodiak, Georgia, "Times New Roman", serif';
+
+
+/* ================================================================== */
+
+const cv   = document.getElementById("c");
+const ctx  = cv.getContext("2d");
+const mask = document.createElement("canvas");
+const mctx = mask.getContext("2d");
+const tex  = document.createElement("canvas");
+const tctx = tex.getContext("2d");
+const wrap = document.getElementById("wrap");
+
+let scale = 1, dpr = 1;
+
+function resize() {
+  const box = wrap.getBoundingClientRect();
+  const avail = Math.max(320, box.width - 24);
+  // the row eats 56.5 design units of height below the card
+  scale = Math.min(avail / W, Math.max(140, window.innerHeight - 40) / (H + 56.5));
+  dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  for (const cnv of [cv, mask, tex]) {
+    cnv.width  = Math.round(W * scale * dpr);
+    cnv.height = Math.round(H * scale * dpr);
+  }
+  cv.style.width  = Math.round(W * scale) + "px";
+  cv.style.height = Math.round(H * scale) + "px";
+  wrap.style.setProperty("--s", scale + "px");
+  measureStrip();
+  draw();
+}
+
+function setup(c) {
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+  c.scale(scale * dpr, scale * dpr);
+}
+
+function rr(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y,     x + w, y + h, r);
+  c.arcTo(x + w, y + h, x,     y + h, r);
+  c.arcTo(x,     y + h, x,     y,     r);
+  c.arcTo(x,     y,     x + w, y,     r);
+  c.closePath();
+}
+
+/* ---------- state ---------- */
+
+const S = {
+  minutes: 25, total: 25 * 60000, left: 25 * 60000,
+  running: false, endAt: 0,
+  img: null, dim: 0,
+  invert: false, autoDim: true,
+  alarm: false, loop: true, volume: 0.8,
+  active: null,           // id of the chip that set the current duration
+  hover: null, press: 0,
+  editing: false,
+  chips: []               // { id, name, emoji, colour, minutes }
+};
+
+/* ---------- text sized by ink width ---------- */
+
+const fitCache = new Map();
+function fit(tpl, text, targetW) {
+  const key = tpl + "|" + text + "|" + targetW;
+  if (fitCache.has(key)) return fitCache.get(key);
+  let lo = 4, hi = 200;
+  for (let i = 0; i < 22; i++) {
+    const mid = (lo + hi) / 2;
+    ctx.font = tpl.replace("SIZE", mid.toFixed(2));
+    if (ctx.measureText(text).width > targetW) hi = mid; else lo = mid;
+  }
+  fitCache.set(key, lo);
+  return lo;
+}
+
+function inkText(c, text, tpl, size, colour, x, y) {
+  c.font = tpl.replace("SIZE", size.toFixed(2));
+  c.fillStyle = colour;
+  c.textAlign = "left"; c.textBaseline = "alphabetic";
+  const m = c.measureText(text);
+  const lead = (m.actualBoundingBoxLeft !== undefined) ? -m.actualBoundingBoxLeft : 0;
+  c.fillText(text, x - lead, y);
+}
+
+function dotGlyph(c, g, col, radius) {
+  const w = g[0].length;
+  for (let r = 0; r < g.length; r++) {
+    for (let k = 0; k < w; k++) {
+      if (g[r][k] !== "#") continue;
+      c.beginPath();
+      c.arc(DOT.x0 + (col + k) * DOT.pitch, DOT.y0 + r * DOT.pitch, radius, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+}
+
+function drawMaskInto(c, clock, progress, unit) {
+  c.save();
+  c.scale(unit, unit);
+  rr(c, CARD.x, CARD.y, CARD.w, CARD.h, CARD.r);
+  c.clip();
+  c.fillStyle = "#fff";
+  c.fill(CHK_LEFT);
+  c.fill(CHK_RIGHT);
+
+  let col = 0;
+  for (const ch of clock) {
+    const g = GLYPHS[ch];
+    if (!g) { col += 4; continue; }
+    dotGlyph(c, g, col, DOT.r);
+    col += g[0].length + 1;               // one blank column between glyphs
+  }
+
+  const tapped = performance.now() - S.press < 160;
+  let grow = tapped ? 0.82 : (S.hover === "play" ? 1.14 : 1);
+  if (S.alarm) grow *= 1 + 0.12 * Math.sin(performance.now() / 150);
+  dotGlyph(c, GLYPHS[S.alarm ? "stop" : (S.running ? "pause" : "play")], PLAY.col, DOT.r * grow);
+
+  const bw = Math.max(0, Math.min(BAR.full, progress * BAR.full));
+  if (bw > 0) c.fillRect(BAR.x, BAR.y, bw, BAR.h);
+  c.restore();
+}
+
+function buildMask(clock, progress) {
+  setup(mctx);
+  drawMaskInto(mctx, clock, progress, 1);
+}
+
+/* ---------- the artwork revealed through the mask ---------- */
+
+let fallback = null;
+function fallbackImage() {
+  if (fallback) return fallback;
+  const n = document.createElement("canvas");
+  n.width = 1000; n.height = 300;
+  const g = n.getContext("2d");
+  const grad = g.createLinearGradient(0, 0, 1000, 300);
+  grad.addColorStop(0.00, "#0b1540");
+  grad.addColorStop(0.30, "#4b2c7f");
+  grad.addColorStop(0.55, "#a8405e");
+  grad.addColorStop(0.78, "#e08b3a");
+  grad.addColorStop(1.00, "#f7dc8c");
+  g.fillStyle = grad; g.fillRect(0, 0, 1000, 300);
+  for (let i = 0; i < 260; i++) {
+    g.globalAlpha = 0.04 + Math.random() * 0.08;
+    g.fillStyle = Math.random() > 0.5 ? "#fff" : "#000";
+    g.beginPath();
+    g.arc(Math.random() * 1000, Math.random() * 300, 30 + Math.random() * 150, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  fallback = n;
+  return n;
+}
+
+function paintImage(c, src, unit, dim) {
+  c.save();
+  c.scale(unit, unit);
+  rr(c, CARD.x, CARD.y, CARD.w, CARD.h, CARD.r);
+  c.clip();
+  const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+  const s = Math.max(CARD.w / sw, CARD.h / sh);                 // cover-fit over the card
+  const dw = sw * s, dh = sh * s;
+  c.drawImage(src, CARD.x + (CARD.w - dw) / 2, CARD.y + (CARD.h - dh) / 2, dw, dh);
+  if (dim > 0) {
+    c.fillStyle = "rgba(0,0,0," + dim.toFixed(3) + ")";
+    c.fillRect(CARD.x, CARD.y, CARD.w, CARD.h);
+  }
+  c.restore();
+}
+
+/* Auto-dim: measure how bright the image is where it actually meets the
+   #EBEBEB shapes -- inside them normally, around them when inverted --
+   then lay down just enough black for the edge to read. Runs once per
+   image, not per frame. */
+const CARD_LUM   = 0.831;   // relative luminance of #EBEBEB
+const MIN_RATIO  = 2.7;     // contrast we want against the card
+const MAX_DIM    = 0.68;
+
+function relLum(r, g, b) {
+  const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function computeDim() {
+  if (!S.autoDim) { S.dim = 0; return; }
+  const src = S.img || fallbackImage();
+  const unit = 0.22;                                     // ~269 x 74 probe
+  const n = document.createElement("canvas");
+  n.width  = Math.round(W * unit);
+  n.height = Math.round(H * unit);
+  const g = n.getContext("2d", { willReadFrequently: true });
+  paintImage(g, src, unit, 0);
+  g.globalCompositeOperation = S.invert ? "destination-out" : "destination-in";
+  drawMaskInto(g, "100:00", 1, unit);                    // widest clock + full bar
+  g.globalCompositeOperation = "source-over";
+
+  let d;
+  try { d = g.getImageData(0, 0, n.width, n.height).data; } catch (e) { S.dim = 0; return; }
+  let sum = 0, count = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    sum += relLum(d[i], d[i + 1], d[i + 2]);
+    count++;
+  }
+  if (!count) { S.dim = 0; return; }
+
+  const L = sum / count;
+  const target = (CARD_LUM + 0.05) / MIN_RATIO - 0.05;   // max luminance we'll allow
+  if (L <= target) { S.dim = 0; return; }
+  // black at alpha a scales sRGB by (1-a); luminance follows roughly (1-a)^2.4
+  S.dim = Math.min(MAX_DIM, Math.max(0, 1 - Math.pow(target / L, 1 / 2.4)));
+}
+
+function paintTexture() {
+  setup(tctx);
+  paintImage(tctx, S.img || fallbackImage(), 1, S.dim);
+  // normal: keep only what's inside the shapes.
+  // invert: keep everything except the shapes, so the card shows through them.
+  tctx.globalCompositeOperation = S.invert ? "destination-out" : "destination-in";
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.drawImage(mask, 0, 0);
+  tctx.globalCompositeOperation = "source-over";
+}
+
+/* ---------- draw ---------- */
+
+function clockText() {
+  const secs = Math.max(0, Math.ceil(S.left / 1000));
+  return String(Math.floor(secs / 60)).padStart(2, "0") + ":" + String(secs % 60).padStart(2, "0");
+}
+
+function draw() {
+  const progress = S.total > 0 ? 1 - S.left / S.total : 0;
+  buildMask(clockText(), progress);
+  paintTexture();
+
+  setup(ctx);
+  ctx.fillStyle = C.page;
+  ctx.fillRect(0, 0, W, H);
+
+  rr(ctx, CARD.x, CARD.y, CARD.w, CARD.h, CARD.r);
+  ctx.fillStyle = C.card; ctx.fill();
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(tex, 0, 0);
+  ctx.restore();
+
+  const ps = fit(SERIF, "pomodoro", POMO.w);
+  ctx.font = SERIF.replace("SIZE", ps.toFixed(2));
+  const asc = ctx.measureText("pomodoro").actualBoundingBoxAscent || ps * 0.72;
+  inkText(ctx, "pomodoro", SERIF, ps, S.invert ? C.card : C.pomo, POMO.x, POMO.top + asc);
+}
+
+/* ---------- timer ---------- */
+
+function setMinutes(m, activeId, start) {
+  S.minutes = Math.max(1, Math.min(100, Math.round(m)));
+  S.total = S.minutes * 60000;
+  S.left = S.total;
+  S.active = activeId || null;
+  if (start) { S.endAt = Date.now() + S.left; S.running = true; }
+  else S.running = false;
+  syncRow();
+  draw();
+}
+
+function toggle() {
+  if (S.alarm) { dismiss(); return; }
+  if (S.running) { S.left = Math.max(0, S.endAt - Date.now()); S.running = false; }
+  else           { S.endAt = Date.now() + S.left;              S.running = true;  }
+  S.press = performance.now();
+  draw();
+}
+
+/* Wall-clock, not accumulated frame deltas -- a backgrounded tab throttles
+   requestAnimationFrame, and the countdown would otherwise fall behind. */
+function elapse() {
+  if (!S.running) return;
+  S.left = S.endAt - Date.now();
+  if (S.left <= 0) { S.left = 0; S.running = false; done(); }
+}
+
+function tick(now) {
+  elapse();
+  if (S.running || S.alarm || now - S.press < 200) draw();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+setInterval(elapse, 500);        // keeps ticking, and fires, while hidden
+
+/* ---------- alarm ---------- */
+
+const ring = new Audio();
+let ringURL = null, chimeTimer = null, audioCtx = null;
+
+function chime() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    [0, 0.22, 0.44].forEach((d, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.value = 660 + i * 110;
+      const peak = Math.max(0.0002, 0.2 * S.volume);
+      g.gain.setValueAtTime(0.0001, audioCtx.currentTime + d);
+      g.gain.exponentialRampToValueAtTime(peak,   audioCtx.currentTime + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d + 0.18);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(audioCtx.currentTime + d); o.stop(audioCtx.currentTime + d + 0.2);
+    });
+  } catch (e) {}
+}
+
+function playAlarm(preview) {
+  const loop = preview ? false : S.loop;
+  if (ringURL) {
+    ring.loop = loop;
+    ring.volume = S.volume;
+    try { ring.currentTime = 0; } catch (e) {}
+    ring.play().catch(() => {});
+    if (!loop && !preview) ring.onended = () => dismiss();
+  } else {
+    chime();
+    if (loop) chimeTimer = setInterval(chime, 2100);
+  }
+}
+
+function stopAlarm() {
+  ring.pause();
+  ring.onended = null;
+  try { ring.currentTime = 0; } catch (e) {}
+  if (chimeTimer) { clearInterval(chimeTimer); chimeTimer = null; }
+}
+
+function done() {
+  if (S.alarm) return;
+  S.alarm = true;
+  playAlarm(false);
+  draw();
+}
+
+function dismiss() {
+  if (!S.alarm) return;
+  S.alarm = false;
+  stopAlarm();
+  S.running = false;
+  S.left = S.total;
+  draw();
+}
+
+/* ---------- pointer on the card ---------- */
+
+function toDesign(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / (r.width / W), y: (e.clientY - r.top) / (r.height / H) };
+}
+const inBox = (p, b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+
+cv.addEventListener("pointerdown", e => {
+  cv.focus();
+  if (S.alarm) { dismiss(); return; }
+  if (inBox(toDesign(e), PLAY_BOX)) toggle();
+});
+cv.addEventListener("pointermove", e => {
+  const h = inBox(toDesign(e), PLAY_BOX) ? "play" : null;
+  if (h !== S.hover) { S.hover = h; cv.style.cursor = h ? "pointer" : "default"; draw(); }
+});
+cv.addEventListener("pointerleave", () => { if (S.hover) { S.hover = null; cv.style.cursor = "default"; draw(); } });
+
+window.addEventListener("keydown", e => {
+  const t = (document.activeElement || {});
+  if (t.isContentEditable || /INPUT/.test(t.tagName || "")) {
+    if (e.code === "Escape" || e.code === "Enter") { e.preventDefault(); t.blur(); }
+    return;
+  }
+  if (e.code === "Escape") {
+    if (S.alarm) dismiss();
+    else if (S.editing) setEditing(false);
+    else setPanel(false);
+    return;
+  }
+  if (/^(Shift|Control|Alt|Meta|Caps|Tab)/.test(e.key)) return;
+  if (S.alarm) { e.preventDefault(); dismiss(); return; }
+  if (document.body.classList.contains("panel-open") && /BUTTON/.test(t.tagName || "")) return;
+  if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); toggle(); }
+  else if (e.code === "KeyR") { S.running = false; S.left = S.total; draw(); }
+  else if (e.code === "KeyI") { setInvert(!S.invert); }
+  else if (e.code === "ArrowLeft"  || e.code === "ArrowDown") { e.preventDefault(); setMinutes(S.minutes - (e.shiftKey ? 5 : 1), null, false); }
+  else if (e.code === "ArrowRight" || e.code === "ArrowUp")   { e.preventDefault(); setMinutes(S.minutes + (e.shiftKey ? 5 : 1), null, false); }
+});
+
+/* ==================================================================
+   CONTROL ROW
+   ================================================================== */
+
+const PALETTE = ["#90A3FF", "#E2B166", "#9AD8A6", "#F0A0B4", "#A6D9E8",
+                 "#D3B4F2", "#EBD97C", "#F2A97E", "#8FD5C6", "#F5B8D0"];
+const EMOJI = ["📑","🧘","📚","💻","🧪","✍️","🎧","🏃","☕","🍅","🧠","🔬",
+               "📝","🎯","🌙","☀️","🎹","🗂","🧹","🛠","💤","🍽","📞","🧾"];
+
+/* Text sits on the chip's own hue: pushed dark when the background is
+   light, pushed light when it's dark. */
+function hsl(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  let h = 0, s = 0;
+  if (mx !== mn) {
+    const d = mx - mn;
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
+}
+function inkFor(hex) {
+  const [h, s, l] = hsl(hex);
+  if (s < 0.12) return l > 0.5 ? "#191919" : "#EBEBEB";
+  return l > 0.5 ? `hsl(${h.toFixed(0)} ${Math.max(s, 0.6) * 100}% 20%)`
+                 : `hsl(${h.toFixed(0)} ${Math.max(s, 0.5) * 100}% 90%)`;
+}
+
+const chipsEl = document.getElementById("chips");
+const stripEl = document.getElementById("strip");
+const addBtn  = Object.assign(document.createElement("button"), { id: "add", type: "button", textContent: "+" });
+const doneBtn = Object.assign(document.createElement("button"), { id: "done", type: "button", textContent: "Done" });
+const rowEl   = document.getElementById("row");
+
+const FIXED = [
+  { id: "short", name: "Short Break", minutes: 5,  colour: "#FFFFFF" },
+  { id: "long",  name: "Long Break",  minutes: 15, colour: "#FFFFFF" }
+];
+
+function buildRow() {
+  chipsEl.textContent = "";
+  const all = FIXED.concat(S.chips);
+  all.forEach((c, i) => chipsEl.appendChild(makeChip(c, i, i >= FIXED.length)));
+  chipsEl.appendChild(addBtn);
+  chipsEl.appendChild(doneBtn);
+  syncRow();
+  measureStrip();
+}
+
+function makeChip(c, index, custom) {
+  const el = document.createElement("div");
+  el.className = "chip" + (index % 2 === 0 ? " flip" : "") + (custom ? " custom" : "");
+  el.dataset.id = c.id;
+  el.style.background = c.colour;
+  el.style.color = inkFor(c.colour);
+
+  if (custom) {
+    const del = document.createElement("button");
+    del.type = "button"; del.className = "del"; del.title = "Remove";
+    del.addEventListener("click", ev => {
+      ev.stopPropagation();
+      S.chips = S.chips.filter(x => x.id !== c.id);
+      saveSettings(); buildRow();
+    });
+    el.appendChild(del);
+
+    const emo = document.createElement("span");
+    emo.className = "emo"; emo.textContent = c.emoji || "🍅";
+    emo.addEventListener("click", ev => {
+      if (!S.editing) return;
+      ev.stopPropagation(); openEmoji(emo, c);
+    });
+    el.appendChild(emo);
+  }
+
+  const lbl = document.createElement("span");
+  lbl.className = "lbl"; lbl.textContent = c.name;
+  if (custom) {
+    lbl.addEventListener("input", () => { c.name = lbl.textContent.trim() || "Focus"; saveSettings(); });
+    lbl.addEventListener("blur",  () => { lbl.textContent = c.name; measureStrip(); });
+    lbl.addEventListener("click", ev => { if (S.editing) ev.stopPropagation(); });
+  }
+  el.appendChild(lbl);
+
+  if (custom) {
+    const mins = document.createElement("span");
+    mins.className = "mins"; mins.textContent = c.minutes + "m";
+    mins.addEventListener("click", ev => {
+      if (!S.editing) return;
+      ev.stopPropagation();
+      const v = prompt("Minutes for “" + c.name + "”", c.minutes);
+      const n = Math.max(1, Math.min(100, parseInt(v, 10) || c.minutes));
+      c.minutes = n; mins.textContent = n + "m"; saveSettings(); measureStrip();
+    });
+    el.appendChild(mins);
+
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = c.colour;
+    sw.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const i = PALETTE.indexOf(c.colour);
+      c.colour = PALETTE[(i + 1) % PALETTE.length];
+      el.style.background = c.colour;
+      el.style.color = inkFor(c.colour);
+      sw.style.background = c.colour;
+      saveSettings();
+    });
+    el.appendChild(sw);
+  }
+
+  el.addEventListener("click", () => {
+    if (S.editing) return;
+    setMinutes(c.minutes, c.id, true);
+  });
+  return el;
+}
+
+function setEditing(on) {
+  S.editing = on;
+  rowEl.classList.toggle("editing", on);
+  chipsEl.querySelectorAll(".chip.custom .lbl").forEach(l => {
+    l.contentEditable = on ? "true" : "false";
+  });
+  closeEmoji();
+  measureStrip();
+}
+
+addBtn.addEventListener("click", ev => {
+  ev.stopPropagation();
+  const used = S.chips.map(c => c.colour);
+  const colour = PALETTE.find(p => !used.includes(p)) || PALETTE[S.chips.length % PALETTE.length];
+  const c = { id: "c" + Date.now().toString(36), name: "Focus", emoji: EMOJI[S.chips.length % EMOJI.length], colour, minutes: 25 };
+  S.chips.push(c);
+  saveSettings();
+  buildRow();
+  setEditing(true);
+  const el = chipsEl.querySelector('.chip[data-id="' + c.id + '"] .lbl');
+  if (el) {
+    el.scrollIntoView({ inline: "center", block: "nearest" });
+    el.focus();
+    const r = document.createRange(); r.selectNodeContents(el);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+});
+doneBtn.addEventListener("click", ev => { ev.stopPropagation(); setEditing(false); });
+
+function syncRow() {
+  chipsEl.querySelectorAll(".chip").forEach(el => {
+    el.classList.toggle("active", el.dataset.id === S.active);
+  });
+  document.getElementById("cval").textContent = S.minutes;
+  document.getElementById("fill").style.width = ((S.minutes - 1) / 99 * 100).toFixed(2) + "%";
+}
+
+function measureStrip() {
+  requestAnimationFrame(() => {
+    const over = chipsEl.scrollWidth - chipsEl.clientWidth;
+    stripEl.classList.toggle("fadeL", chipsEl.scrollLeft > 2);
+    stripEl.classList.toggle("fadeR", over > 2 && chipsEl.scrollLeft < over - 2);
+  });
+}
+chipsEl.addEventListener("scroll", measureStrip);
+
+/* emoji picker */
+const emojiEl = document.getElementById("emoji");
+EMOJI.forEach(e => {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = e;
+  b.addEventListener("click", ev => {
+    ev.stopPropagation();
+    if (emojiEl.target) {
+      emojiEl.target.chip.emoji = e;
+      emojiEl.target.el.textContent = e;
+      saveSettings(); measureStrip();
+    }
+    closeEmoji();
+  });
+  emojiEl.appendChild(b);
+});
+function openEmoji(el, chip) {
+  const r = el.getBoundingClientRect();
+  emojiEl.target = { el, chip };
+  emojiEl.classList.add("open");
+  const w = emojiEl.offsetWidth, h = emojiEl.offsetHeight;
+  emojiEl.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
+  emojiEl.style.top  = Math.max(8, r.top - h - 8) + "px";
+}
+function closeEmoji() { emojiEl.classList.remove("open"); emojiEl.target = null; }
+emojiEl.addEventListener("pointerdown", e => e.stopPropagation());
+
+/* custom-time track */
+const trackEl = document.getElementById("track");
+let dragging = false;
+function trackTo(clientX) {
+  const r = trackEl.getBoundingClientRect();
+  const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+  setMinutes(1 + t * 99, null, false);
+}
+trackEl.addEventListener("pointerdown", e => {
+  dragging = true; trackEl.setPointerCapture(e.pointerId); trackTo(e.clientX);
+});
+trackEl.addEventListener("pointermove", e => { if (dragging) trackTo(e.clientX); });
+trackEl.addEventListener("pointerup",   () => { dragging = false; });
+trackEl.addEventListener("pointercancel", () => { dragging = false; });
+
+/* ---------- panel ---------- */
+
+const panel    = document.getElementById("panel");
+const btnPanel = document.getElementById("btnPanel");
+
+function setPanel(open) {
+  document.body.classList.toggle("panel-open", open);
+  btnPanel.setAttribute("aria-expanded", open ? "true" : "false");
+}
+btnPanel.addEventListener("pointerdown", e => e.stopPropagation());
+btnPanel.addEventListener("click", e => {
+  e.stopPropagation();
+  setPanel(!document.body.classList.contains("panel-open"));
+});
+panel.addEventListener("pointerdown", e => e.stopPropagation());
+rowEl.addEventListener("pointerdown", e => e.stopPropagation());
+document.getElementById("btnClose").addEventListener("click", () => setPanel(false));
+window.addEventListener("pointerdown", () => { setPanel(false); closeEmoji(); });
+
+function bindSwitch(el, get, set) {
+  el.classList.toggle("on", get());
+  el.addEventListener("click", () => { set(!get()); el.classList.toggle("on", get()); });
+}
+
+/* ---------- storage ---------- */
+
+const KEY_IMG = "pomodoro.image.v2";
+const KEY_SET = "pomodoro.settings.v2";
+
+function saveSettings() {
+  try {
+    localStorage.setItem(KEY_SET, JSON.stringify({
+      invert: S.invert, autoDim: S.autoDim, loop: S.loop, volume: S.volume, chips: S.chips
+    }));
+  } catch (e) {}
+}
+
+/* The image is small enough for localStorage. A sound file usually isn't,
+   so that goes in IndexedDB as a Blob. */
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("pomodoro", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("files");
+    r.onsuccess = () => res(r.result);
+    r.onerror   = () => rej(r.error);
+  });
+}
+async function idbSet(k, v) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const t = db.transaction("files", "readwrite");
+    t.objectStore("files").put(v, k);
+    t.oncomplete = res; t.onerror = () => rej(t.error);
+  });
+}
+async function idbGet(k) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const t = db.transaction("files", "readonly");
+    const q = t.objectStore("files").get(k);
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  });
+}
+
+/* ---------- image ---------- */
+
+const imgLabel = document.getElementById("imgName");
+
+function applyDataURL(url) {
+  const im = new Image();
+  im.onload = () => { S.img = im; computeDim(); draw(); };
+  im.src = url;
+}
+
+function storeImage(file) {
+  if (!file || !/^image\//.test(file.type)) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    const im = new Image();
+    im.onload = () => {
+      const s = Math.min(1, 1400 / Math.max(im.width, im.height));
+      const n = document.createElement("canvas");
+      n.width = Math.round(im.width * s); n.height = Math.round(im.height * s);
+      n.getContext("2d").drawImage(im, 0, 0, n.width, n.height);
+      let url = n.toDataURL("image/jpeg", 0.85);
+      if (url.length > 3.2e6) url = n.toDataURL("image/jpeg", 0.6);
+      try {
+        localStorage.setItem(KEY_IMG, url);
+        localStorage.setItem(KEY_IMG + ".name", file.name);
+      } catch (err) {}
+      imgLabel.textContent = file.name;
+      applyDataURL(url);
+    };
+    im.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+
+document.getElementById("pImg").addEventListener("click", () => document.getElementById("file").click());
+document.getElementById("file").addEventListener("change", e => storeImage(e.target.files[0]));
+document.getElementById("pImgClear").addEventListener("click", () => {
+  try { localStorage.removeItem(KEY_IMG); localStorage.removeItem(KEY_IMG + ".name"); } catch (e) {}
+  imgLabel.textContent = "Default gradient";
+  S.img = null; computeDim(); draw();
+});
+
+/* ---------- ringtone ---------- */
+
+const ringLabel = document.getElementById("ringName");
+
+function useRing(blob, name) {
+  if (ringURL) URL.revokeObjectURL(ringURL);
+  ringURL = blob ? URL.createObjectURL(blob) : null;
+  if (ringURL) ring.src = ringURL; else ring.removeAttribute("src");
+  ringLabel.textContent = blob ? (name || "Custom sound") : "Built-in chime";
+}
+
+function storeRing(file) {
+  if (!file || !/^audio\//.test(file.type)) return;
+  idbSet("ring", file).then(() => idbSet("ringName", file.name)).catch(() => {});
+  useRing(file, file.name);
+}
+
+document.getElementById("pRing").addEventListener("click", () => document.getElementById("fileA").click());
+document.getElementById("fileA").addEventListener("change", e => storeRing(e.target.files[0]));
+document.getElementById("pRingClear").addEventListener("click", () => {
+  idbSet("ring", null).catch(() => {});
+  idbSet("ringName", null).catch(() => {});
+  stopAlarm(); useRing(null);
+});
+
+const btnTest = document.getElementById("pTest");
+btnTest.addEventListener("click", () => {
+  if (btnTest.textContent === "Stop") { stopAlarm(); btnTest.textContent = "Play"; return; }
+  playAlarm(true);
+  btnTest.textContent = "Stop";
+  setTimeout(() => { if (btnTest.textContent === "Stop") { stopAlarm(); btnTest.textContent = "Play"; } }, 4000);
+});
+
+/* ---------- settings wiring ---------- */
+
+bindSwitch(document.getElementById("swInv"),  () => S.invert,  v => { S.invert = v;  computeDim(); draw(); saveSettings(); });
+bindSwitch(document.getElementById("swDim"),  () => S.autoDim, v => { S.autoDim = v; computeDim(); draw(); saveSettings(); });
+bindSwitch(document.getElementById("swLoop"), () => S.loop,    v => { S.loop = v;    saveSettings(); });
+
+const vol = document.getElementById("vol");
+vol.addEventListener("input", () => {
+  S.volume = vol.value / 100; ring.volume = S.volume; saveSettings();
+});
+
+function setInvert(v) {
+  S.invert = !!v;
+  document.getElementById("swInv").classList.toggle("on", S.invert);
+  computeDim(); draw(); saveSettings();
+}
+
+/* ---------- restore ---------- */
+
+try {
+  const st = JSON.parse(localStorage.getItem(KEY_SET) || "{}");
+  if (typeof st.invert  === "boolean") S.invert  = st.invert;
+  if (typeof st.autoDim === "boolean") S.autoDim = st.autoDim;
+  if (typeof st.loop    === "boolean") S.loop    = st.loop;
+  if (typeof st.volume  === "number")  S.volume  = st.volume;
+  if (Array.isArray(st.chips)) S.chips = st.chips.filter(c => c && c.id && c.minutes);
+} catch (e) {}
+document.getElementById("swInv").classList.toggle("on", S.invert);
+document.getElementById("swDim").classList.toggle("on", S.autoDim);
+document.getElementById("swLoop").classList.toggle("on", S.loop);
+vol.value = Math.round(S.volume * 100);
+ring.volume = S.volume;
+
+try {
+  const saved = localStorage.getItem(KEY_IMG);
+  if (saved) {
+    imgLabel.textContent = localStorage.getItem(KEY_IMG + ".name") || "Saved image";
+    applyDataURL(saved);
+  }
+} catch (e) {}
+
+Promise.all([idbGet("ring"), idbGet("ringName")])
+  .then(([blob, name]) => { if (blob) useRing(blob, name); })
+  .catch(() => {});
+
+/* ---------- drag, drop, paste ---------- */
+
+function takeFile(f) {
+  if (!f) return;
+  if (/^image\//.test(f.type)) storeImage(f);
+  else if (/^audio\//.test(f.type)) storeRing(f);
+}
+
+let dragDepth = 0;
+window.addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; document.body.classList.add("dragging"); });
+window.addEventListener("dragover",  e => e.preventDefault());
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+window.addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
+  takeFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+});
+window.addEventListener("paste", e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const it of items) if (it.type && it.type.startsWith("image/")) { storeImage(it.getAsFile()); break; }
+});
+
+/* ---------- boot ---------- */
+
+buildRow();
+window.addEventListener("resize", resize);
+computeDim();
+resize();
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { fitCache.clear(); draw(); });
+}
+})();
+</script>
+</body>
+</html>
