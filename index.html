@@ -1,1198 +1,1188 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>pomodoro</title>
-<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f%5B%5D=zodiak@400,401&display=swap">
-<style>
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
-  body {
-    background: #191919; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
-  }
-  /* --s is one design unit in px; every size below is written in those units,
-     so the whole thing scales as one piece. */
-  #wrap { position: relative; width: 100%; max-width: 1248px; padding: 12px; --s: 1px; }
-  #cardwrap { position: relative; }
-  canvas { display: block; width: 100%; height: auto; touch-action: none; outline: none; }
-
-  /* ---- hover trigger ---------------------------------------------- */
-  #tools {
-    position: absolute; top: calc(20 * var(--s)); right: calc(22 * var(--s)); z-index: 3;
-    opacity: 0; transform: translateY(-3px);
-    transition: opacity .2s ease, transform .2s ease; pointer-events: none;
-  }
-  #cardwrap:hover #tools, #tools:focus-within { opacity: 1; transform: none; pointer-events: auto; }
-  body.panel-open #tools { opacity: 0; pointer-events: none; }
-  #btnPanel {
-    border: 0; border-radius: 999px; cursor: pointer; background: #fff; color: #000;
-    padding: 8px 15px; font: 400 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
-    box-shadow: 0 1px 6px rgba(0,0,0,.16); transition: transform .14s ease, box-shadow .14s ease;
-  }
-  #btnPanel i { font-family: Zodiak, Georgia, serif; font-style: italic; font-size: 14px; margin-right: 5px; color: #24094A; }
-  #btnPanel:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.22); }
-
-  /* ---- panel ------------------------------------------------------- */
-  #panel {
-    position: absolute; inset: 0; z-index: 2;
-    background: #fff; border-radius: calc(29.5 * var(--s));
-    padding: 20px 26px 16px; color: #000;
-    display: flex; flex-direction: column; gap: 12px; overflow: auto;
-    box-shadow: 0 20px 55px rgba(0,0,0,.5);
-    opacity: 0; transform: translateY(-12px) scale(.985); transform-origin: 50% 0;
-    transition: opacity .18s ease, transform .18s ease; pointer-events: none;
-  }
-  body.panel-open #panel { opacity: 1; transform: none; pointer-events: auto; }
-  .phead { display: flex; align-items: baseline; justify-content: space-between; }
-  .phead b { font: 400 20px/1 Zodiak, Georgia, serif; font-style: italic; color: #24094A; }
-  .phead b span { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-style: normal; font-size: 17px; color: #000; margin-left: 6px; }
-  #btnClose { border: 0; background: none; cursor: pointer; color: #9a9a9a; font: 400 22px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 0 2px; }
-  #btnClose:hover { color: #000; }
-  .pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 30px; flex: 1; align-content: start; }
-  .sec { min-width: 0; }
-  .sec h4 { margin: 0 0 11px; font: 400 15px/1 Zodiak, Georgia, serif; font-style: italic; color: var(--acc); }
-  .prow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; font-size: 12.5px; min-width: 0; }
-  .prow > span { white-space: nowrap; }
-  .name { font-size: 11.5px; color: #7c7c7c; margin: -4px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sw { position: relative; width: 36px; height: 20px; border-radius: 999px; background: #dcdcdc; border: 0; cursor: pointer; flex: none; transition: background .16s ease; }
-  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .16s ease; }
-  .sw.on { background: var(--acc); }
-  .sw.on::after { transform: translateX(16px); }
-  .mini { border: 0; border-radius: 999px; background: #efefef; color: #000; font: 400 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
-  .mini:hover { background: #e3e3e3; }
-  .mini.accent { background: var(--acc); color: #fff; }
-  .mini.accent:hover { filter: brightness(1.25); }
-  #panel input[type=range] { -webkit-appearance: none; appearance: none; width: 96px; height: 6px; border-radius: 3px; background: #dcdcdc; flex: none; }
-  #panel input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--acc); cursor: pointer; }
-  #panel input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--acc); cursor: pointer; }
-  .pfoot { font-size: 11px; color: #9a9a9a; letter-spacing: .02em; }
-  .pfoot em { font-family: Zodiak, Georgia, serif; font-style: italic; color: #6a6a6a; }
-  @media (max-width: 760px) { .pgrid { grid-template-columns: 1fr; gap: 2px; } .pfoot { display: none; } }
-
-  /* ---- control row ------------------------------------------------- */
-  /* Sizes traced from the Affinity export: 35 tall becomes 37 design
-     units once the 1157-wide row is scaled to the card's 1222.        */
-  #row {
-    display: flex; align-items: center;
-    gap: calc(30 * var(--s));
-    margin-top: calc(31 * var(--s));
-    height: calc(50 * var(--s));
-  }
-
-  #strip { position: relative; flex: 1 1 auto; min-width: 0; height: 100%; }
-  #chips {
-    display: flex; align-items: center; gap: calc(20 * var(--s));
-    height: 100%; overflow-x: auto; overflow-y: hidden; padding: calc(2 * var(--s)) 0;
-    scrollbar-width: none; -ms-overflow-style: none;
-  }
-  #chips::-webkit-scrollbar { display: none; }
-  #strip.fadeL #chips { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 100%); mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 100%); }
-  #strip.fadeR #chips { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 50 * var(--s)), transparent 100%); mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 50 * var(--s)), transparent 100%); }
-  #strip.fadeL.fadeR #chips { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 calc(100% - 50 * var(--s)), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 calc(50 * var(--s)), #000 calc(100% - 50 * var(--s)), transparent 100%); }
-
-  /* The cap sits on the right for even chips and on the left for odd ones,
-     so the row reads as an alternating sequence. */
-  .chip {
-    position: relative; flex: none; height: 100%;
-    display: inline-flex; align-items: center; justify-content: center;
-    gap: calc(10 * var(--s));
-    padding: 0 calc(30 * var(--s));
-    border: calc(2.34 * var(--s)) solid #191919;
-    background: #fff; color: #191919;
-    font: 700 calc(21 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
-    white-space: nowrap; cursor: pointer;
-    border-radius: calc(25 * var(--s)) calc(25 * var(--s)) calc(25 * var(--s)) 0;
-    transition: transform .12s ease, filter .12s ease;
-  }
-  .chip.flip { border-radius: calc(25 * var(--s)) calc(25 * var(--s)) 0 calc(25 * var(--s)); }
-  .chip:hover { transform: translateY(calc(-1.5 * var(--s))); }
-  .chip.active { box-shadow: inset 0 0 0 calc(3.5 * var(--s)) currentColor; }
-  .chip .emo { font-size: calc(21 * var(--s)); line-height: 1; }
-  .chip .lbl { outline: none; }
-  .chip .mins { opacity: .55; font-weight: 400; outline: none; }
-  #row.editing .chip.custom .mins { opacity: .8; cursor: text; }
-  #row.editing .chip.custom .mins[contenteditable="true"] {
-    opacity: 1; background: rgba(0,0,0,.10); border-radius: calc(6 * var(--s));
-    padding: 0 calc(5 * var(--s)); min-width: calc(26 * var(--s)); text-align: center;
-  }
-
-  #add {
-    flex: none; width: calc(40 * var(--s)); height: calc(38.5 * var(--s));
-    border: 0; cursor: pointer;
-    background: rgba(255,255,255,.76); color: #191919;
-    border-radius: calc(8 * var(--s)) 0 calc(8 * var(--s)) 0;
-    font: 400 calc(27 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-  #add:hover { background: #fff; }
-
-  /* edit state */
-  .chip .del {
-    display: none; position: absolute; left: calc(6 * var(--s)); top: 50%;
-    transform: translateY(-50%);
-    width: calc(32 * var(--s)); height: calc(32 * var(--s));
-    border: 0; border-radius: 50%; background: #fff; cursor: pointer;
-    align-items: center; justify-content: center; padding: 0;
-  }
-  .chip .del::before {
-    content: ""; width: calc(15 * var(--s)); height: calc(3.2 * var(--s));
-    background: #191919; border-radius: calc(1.6 * var(--s));
-  }
-  #row.editing .chip.custom .del { display: inline-flex; }
-  #row.editing .chip.custom { padding-left: calc(46 * var(--s)); }
-  #row.editing .chip { cursor: default; }
-  #row.editing .chip:hover { transform: none; }
-  #row.editing .chip .lbl { cursor: text; }
-  #row.editing .chip.custom .swatch { display: inline-block; }
-  .chip .swatch {
-    display: none; width: calc(20 * var(--s)); height: calc(20 * var(--s));
-    border-radius: 50%; border: calc(1.6 * var(--s)) solid rgba(0,0,0,.28);
-    cursor: pointer; flex: none; padding: 0; background: none; -webkit-appearance: none; appearance: none;
-    overflow: hidden;
-  }
-  .chip .swatch::-webkit-color-swatch-wrapper { padding: 0; }
-  .chip .swatch::-webkit-color-swatch { border: 0; border-radius: 50%; }
-  .chip .swatch::-moz-color-swatch { border: 0; border-radius: 50%; }
-  #done {
-    display: none; flex: none; height: 100%; padding: 0 calc(28 * var(--s));
-    border: calc(2.34 * var(--s)) solid #191919; background: #fff; color: #191919;
-    font: 700 calc(20 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
-    border-radius: calc(25 * var(--s)); cursor: pointer;
-  }
-  #row.editing #done { display: inline-flex; align-items: center; }
-
-  /* custom-time group */
-  #custom { flex: none; display: flex; align-items: center; gap: calc(13 * var(--s)); }
-  #clabel { font: 700 calc(19 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; }
-  #track {
-    position: relative; width: calc(400 * var(--s)); height: calc(32 * var(--s));
-    border-radius: 999px; background: rgba(255,255,255,.76); cursor: pointer;
-  }
-  #fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: #fff; }
-  #cval { font: 400 calc(36 * var(--s))/1 "Helvetica Neue", Helvetica, Arial, sans-serif; min-width: calc(74 * var(--s)); text-align: right; }
-
-  @media (max-width: 620px) {
-    #custom { display: none; }
-  }
-
-  #drop {
-    position: absolute; inset: 12px; border-radius: 30px; z-index: 4;
-    border: 2px dashed rgba(255,255,255,.55); background: rgba(0,0,0,.42);
-    display: none; align-items: center; justify-content: center;
-    color: #fff; font: 400 16px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
-    letter-spacing: .1em; pointer-events: none;
-  }
-  #drop em { font-family: Zodiak, Georgia, serif; font-style: italic; margin-right: 7px; letter-spacing: 0; }
-  body.dragging #drop { display: flex; }
-  input[type=file] { display: none; }
-
-  #emoji {
-    position: absolute; z-index: 6; display: none;
-    background: #fff; border-radius: 14px; padding: 9px; box-shadow: 0 12px 34px rgba(0,0,0,.45);
-    width: 292px;
-  }
-  #emoji.open { display: block; }
-  #emoji input {
-    width: 100%; border: 1px solid #e0e0e0; border-radius: 9px; padding: 7px 9px;
-    font: 400 13px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000;
-    outline: none; margin-bottom: 7px;
-  }
-  #emoji input:focus { border-color: #24094A; }
-  #emoji .hint { font-size: 10.5px; color: #9a9a9a; margin: 0 2px 7px; }
-  #emoji .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; max-height: 176px; overflow-y: auto; }
-  #emoji .grid button { border: 0; background: none; cursor: pointer; font-size: 19px; line-height: 1; padding: 5px; border-radius: 8px; }
-  #emoji .grid button:hover { background: #eee; }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
 </head>
 <body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f%5B%5D=zodiak@400,401&display=swap">
+<script src="card-art.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: #191919; overflow: hidden; }
+  .sc-host, x-dc { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 100%; }
+  body { color: #fff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; display: flex; align-items: center; justify-content: center; }
+  a { color: #90A3FF; text-decoration: none; }
+  a:hover { color: #fff; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  @keyframes riseIn { from { opacity: 0; transform: translateY(calc(12 * var(--s, 1px))) scale(.94); } to { opacity: 1; transform: none; } }
+  @keyframes sheetIn { from { opacity: 0; transform: translateY(calc(-14 * var(--s, 1px))) scale(.982); } to { opacity: 1; transform: none; } }
+  @keyframes sheetOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(calc(-10 * var(--s, 1px))) scale(.985); } }
+  @keyframes popIn { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes vpopA { 0% { transform: translateY(28%); opacity: .25; } 100% { transform: none; opacity: 1; } }
+  @keyframes vpopB { 0% { transform: translateY(28%); opacity: .25; } 100% { transform: none; opacity: 1; } }
+  @keyframes colIn { from { opacity: 0; transform: translateY(calc(8 * var(--s, 1px))); } to { opacity: 1; transform: none; } }
+</style>
+</helmet>
 
-<div id="wrap">
-  <div id="cardwrap">
-    <canvas id="c" tabindex="0" aria-label="Pomodoro timer"></canvas>
-    <div id="tools">
-      <button id="btnPanel" type="button" aria-expanded="false"><i>Customise</i>Card</button>
+<div ref="{{ wrapRef }}" style="position: relative; width: var(--cardw, 1224px); max-width: 100%; padding: var(--wpad, 12px); --s: 1px; margin: auto;">
+
+  <div ref="{{ cardRef }}" onPointerEnter="{{ cardEnter }}" onPointerLeave="{{ cardLeave }}" style="position: relative;">
+    <canvas ref="{{ cvRef }}" tabIndex="0" aria-label="Pomodoro timer" style="display: block; width: 100%; height: auto; touch-action: none; outline: none;"></canvas>
+
+    <div style="position: absolute; top: calc(20 * var(--s, 1px)); right: calc(22 * var(--s, 1px)); z-index: 3; pointer-events: {{ toolsPE }};">
+      <button type="button" onClick="{{ openPanel }}" aria-label="Customise the card" style="border: 0; border-radius: 999px; cursor: pointer; background: #fff; color: #000; display: inline-flex; align-items: center; gap: calc(5 * var(--s, 1px)); padding: var(--tpadv, 8px) var(--tpadh, 15px); font-weight: 400; font-size: var(--ftool, 13px); line-height: 1; box-shadow: 0 1px 6px rgba(0,0,0,.16); transition: opacity .28s cubic-bezier(.2,.9,.2,1), transform .28s cubic-bezier(.2,.9,.2,1), box-shadow .28s ease; opacity: {{ toolsO }}; transform: {{ toolsT }};" style-hover="opacity: 1; transform: translateY(calc(-1.5 * var(--s, 1px))); box-shadow: 0 6px 16px rgba(0,0,0,.26);" style-focus="opacity: 1; transform: none;" style-active="transform: scale(.96);"><em style="font-family: Zodiak, Georgia, serif; font-style: italic; font-size: var(--ftooli, 14px); color: {{ accent }};">Customise</em>Card</button>
     </div>
-    <div id="panel" role="dialog" aria-label="Customise">
-      <div class="phead">
-        <b>Customise<span>the card</span></b>
-        <button id="btnClose" type="button" aria-label="Close">&times;</button>
-      </div>
-      <div class="pgrid">
-        <div class="sec" style="--acc:#24094A">
-          <h4>Card</h4>
-          <div class="prow"><span>Invert</span><button class="sw" id="swInv" type="button"></button></div>
-          <div class="prow"><span>Auto-darken</span><button class="sw on" id="swDim" type="button"></button></div>
-          <div class="prow"><span>Chime volume</span><input id="vol" type="range" min="0" max="100" value="80"></div>
+
+    <sc-if value="{{ panelOn }}">
+      <div role="dialog" aria-label="Customise" onPointerDown="{{ stop }}" style="position: absolute; inset: 0; z-index: 5; background: #fff; border-radius: calc(29.5 * var(--s, 1px)); padding: var(--ppad, 20px) var(--ppadh, 26px); color: #000; display: flex; flex-direction: column; overflow: auto; box-shadow: 0 20px 55px rgba(0,0,0,.5); transform-origin: 50% 0; animation: {{ panelAnim }};">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: calc(14 * var(--s, 1px)); padding-bottom: var(--pgap, 12px);">
+          <b style="font-family: Zodiak, Georgia, serif; font-style: italic; font-weight: 400; font-size: var(--fpt, 20px); line-height: 1; color: {{ accent }};">Customise<span style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-style: normal; font-size: var(--fpsub, 17px); color: #000; margin-left: calc(6 * var(--s, 1px));">the card</span></b>
+          <button type="button" onClick="{{ closePanel }}" aria-label="Close" style="border: 0; background: none; cursor: pointer; color: #9a9a9a; font-size: var(--fpx, 22px); line-height: 1; width: calc(30 * var(--s, 1px)); height: calc(30 * var(--s, 1px)); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; transition: color .2s ease, background .2s ease, transform .26s cubic-bezier(.2,.9,.2,1);" style-hover="color: #000; background: #f2f2f2; transform: rotate(90deg);">&times;</button>
         </div>
-        <div class="sec" style="--acc:#001697">
-          <h4>Image</h4>
-          <div class="prow">
-            <button class="mini accent" id="pImg" type="button">Choose file</button>
-            <button class="mini" id="pImgClear" type="button">Clear</button>
+
+        <div style="display: grid; grid-template-columns: var(--pgrid, repeat(3, 1fr)); column-gap: var(--pgapx, 30px); row-gap: var(--pgap, 12px); flex: 1; align-content: center; border-top: 1px solid #ececec; border-bottom: 1px solid #ececec; padding: var(--pgap, 12px) 0;">
+
+          <div style="min-width: 0; animation: colIn .34s cubic-bezier(.2,.9,.2,1) both;">
+            <h4 style="margin: 0 0 calc(6 * var(--s, 1px)); font-family: Zodiak, Georgia, serif; font-style: italic; font-weight: 400; font-size: var(--fph, 15px); line-height: 1; color: {{ accent }};">Card</h4>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--s, 1px)); min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fprow, 12.5px);"><span style="white-space: nowrap;">Invert</span>
+              <button type="button" onClick="{{ tglInv }}" aria-label="Invert" style="position: relative; width: var(--swW, 36px); height: var(--swH, 20px); border: 0; border-radius: 999px; cursor: pointer; flex: none; transition: background .24s ease; background: {{ invBg }};"><span style="position: absolute; top: 2px; left: 2px; width: calc(var(--swH, 20px) - 4px); height: calc(var(--swH, 20px) - 4px); border-radius: 50%; background: #fff; transition: transform .26s cubic-bezier(.2,.9,.2,1); transform: {{ invKnob }};"></span></button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--s, 1px)); min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fprow, 12.5px);"><span style="white-space: nowrap;">Auto-darken</span>
+              <button type="button" onClick="{{ tglDim }}" aria-label="Auto-darken" style="position: relative; width: var(--swW, 36px); height: var(--swH, 20px); border: 0; border-radius: 999px; cursor: pointer; flex: none; transition: background .24s ease; background: {{ dimBg }};"><span style="position: absolute; top: 2px; left: 2px; width: calc(var(--swH, 20px) - 4px); height: calc(var(--swH, 20px) - 4px); border-radius: 50%; background: #fff; transition: transform .26s cubic-bezier(.2,.9,.2,1); transform: {{ dimKnob }};"></span></button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--s, 1px)); min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fprow, 12.5px);"><span style="white-space: nowrap;">Chime volume</span>
+              <div ref="{{ volRef }}" onPointerDown="{{ volDown }}" style="position: relative; width: var(--volw, 96px); height: calc(7 * var(--s, 1px)); border-radius: 999px; background: #e6e6e6; flex: none; cursor: pointer;">
+                <div style="position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: {{ accent }}; width: {{ volPct }};"></div>
+                <div style="position: absolute; top: 50%; width: calc(15 * var(--s, 1px)); height: calc(15 * var(--s, 1px)); margin-top: calc(-7.5 * var(--s, 1px)); margin-left: calc(-7.5 * var(--s, 1px)); border-radius: 50%; background: {{ accent }}; box-shadow: 0 1px 4px rgba(0,0,0,.22); left: {{ volPct }};"></div>
+              </div>
+            </div>
           </div>
-          <div class="name" id="imgName">Default gradient</div>
-          <div class="pfoot">Or drop one anywhere on the card.</div>
-        </div>
-        <div class="sec" style="--acc:#945F00">
-          <h4>Alarm</h4>
-          <div class="prow">
-            <button class="mini accent" id="pRing" type="button">Choose sound</button>
-            <button class="mini" id="pRingClear" type="button">Clear</button>
+
+          <div style="min-width: 0; border-left: var(--pdivl, none); padding-left: var(--pcolpl, 0); animation: colIn .34s cubic-bezier(.2,.9,.2,1) .05s both;">
+            <h4 style="margin: 0 0 calc(6 * var(--s, 1px)); font-family: Zodiak, Georgia, serif; font-style: italic; font-weight: 400; font-size: var(--fph, 15px); line-height: 1; color: #001697;">Image</h4>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--s, 1px)); min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fprow, 12.5px);">
+              <button type="button" onClick="{{ pickImg }}" style="border: 0; border-radius: 999px; color: #fff; font-size: var(--fmini, 12px); line-height: 1; padding: var(--minipv, 7px) var(--miniph, 12px); cursor: pointer; white-space: nowrap; flex: none; transition: filter .2s ease, transform .24s cubic-bezier(.2,.9,.2,1); background: #001697;" style-hover="filter: brightness(1.35);" style-active="transform: scale(.96);">Choose file</button>
+              <button type="button" onClick="{{ clearImg }}" style="border: 0; background: none; color: #9a9a9a; font-size: var(--fmini, 12px); line-height: 1; padding: calc(4 * var(--s, 1px)) 0; cursor: pointer; white-space: nowrap; flex: none; text-decoration: underline; text-decoration-color: #d8d8d8; text-underline-offset: 3px; transition: color .2s ease;" style-hover="color: #000;">Clear</button>
+            </div>
+            <div title="{{ imgName }}" style="display: flex; align-items: center; min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fpname, 11.5px); color: #7c7c7c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ imgShort }}</div>
+            <div style="display: flex; align-items: center; min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fpfoot, 11px); color: #b0b0b0;">Or drop one anywhere on the card</div>
           </div>
-          <div class="name" id="ringName">Built-in chime</div>
-          <div class="prow"><span>Loop until dismissed</span><button class="sw on" id="swLoop" type="button"></button></div>
-          <div class="prow"><span>Preview</span><button class="mini" id="pTest" type="button">Play</button></div>
+
+          <div style="min-width: 0; border-left: var(--pdivl, none); padding-left: var(--pcolpl, 0); animation: colIn .34s cubic-bezier(.2,.9,.2,1) .1s both;">
+            <h4 style="margin: 0 0 calc(6 * var(--s, 1px)); font-family: Zodiak, Georgia, serif; font-style: italic; font-weight: 400; font-size: var(--fph, 15px); line-height: 1; color: #945F00;">Alarm</h4>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--s, 1px)); min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fprow, 12.5px);">
+              <button type="button" onClick="{{ pickRing }}" style="border: 0; border-radius: 999px; color: #fff; font-size: var(--fmini, 12px); line-height: 1; padding: var(--minipv, 7px) var(--miniph, 12px); cursor: pointer; white-space: nowrap; flex: none; transition: filter .2s ease, transform .24s cubic-bezier(.2,.9,.2,1); background: #945F00;" style-hover="filter: brightness(1.35);" style-active="transform: scale(.96);">Choose sound</button>
+              <button type="button" onClick="{{ onTest }}" style="border: 0; border-radius: 999px; background: #f4f0e8; color: #945F00; font-size: var(--fmini, 12px); line-height: 1; padding: var(--minipv, 7px) var(--miniph, 12px); cursor: pointer; white-space: nowrap; flex: none; transition: background .2s ease, transform .24s cubic-bezier(.2,.9,.2,1);" style-hover="background: #ece5d6;" style-active="transform: scale(.96);">{{ testLabel }}</button>
+              <button type="button" onClick="{{ clearRing }}" style="border: 0; background: none; color: #9a9a9a; font-size: var(--fmini, 12px); line-height: 1; padding: calc(4 * var(--s, 1px)) 0; cursor: pointer; white-space: nowrap; flex: none; text-decoration: underline; text-decoration-color: #d8d8d8; text-underline-offset: 3px; transition: color .2s ease;" style-hover="color: #000;">Clear</button>
+            </div>
+            <div title="{{ ringName }}" style="display: flex; align-items: center; min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fpname, 11.5px); color: #7c7c7c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ ringShort }}</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--s, 1px)); min-height: var(--prowh, 36px); border-top: 1px solid #f2f2f2; font-size: var(--fprow, 12.5px);"><span style="white-space: nowrap;">Loop until dismissed</span>
+              <button type="button" onClick="{{ tglLoop }}" aria-label="Loop" style="position: relative; width: var(--swW, 36px); height: var(--swH, 20px); border: 0; border-radius: 999px; cursor: pointer; flex: none; transition: background .24s ease; background: {{ loopBg }};"><span style="position: absolute; top: 2px; left: 2px; width: calc(var(--swH, 20px) - 4px); height: calc(var(--swH, 20px) - 4px); border-radius: 50%; background: #fff; transition: transform .26s cubic-bezier(.2,.9,.2,1); transform: {{ loopKnob }};"></span></button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: calc(5 * var(--s, 1px)) calc(15 * var(--s, 1px)); padding-top: var(--pgap, 12px); font-size: var(--fpfoot, 11px); color: #a0a0a0;">
+          <span><kbd style="font-family: Zodiak, Georgia, serif; font-style: italic; color: #5a5a5a; border: 1px solid #e6e6e6; border-radius: calc(5 * var(--s, 1px)); padding: calc(2 * var(--s, 1px)) calc(6 * var(--s, 1px)); margin-right: calc(6 * var(--s, 1px));">Space</kbd>start / pause</span>
+          <span><kbd style="font-family: Zodiak, Georgia, serif; font-style: italic; color: #5a5a5a; border: 1px solid #e6e6e6; border-radius: calc(5 * var(--s, 1px)); padding: calc(2 * var(--s, 1px)) calc(6 * var(--s, 1px)); margin-right: calc(6 * var(--s, 1px));">R</kbd>reset</span>
+          <span><kbd style="font-family: Zodiak, Georgia, serif; font-style: italic; color: #5a5a5a; border: 1px solid #e6e6e6; border-radius: calc(5 * var(--s, 1px)); padding: calc(2 * var(--s, 1px)) calc(6 * var(--s, 1px)); margin-right: calc(6 * var(--s, 1px));">I</kbd>invert</span>
+          <span><kbd style="font-family: Zodiak, Georgia, serif; font-style: italic; color: #5a5a5a; border: 1px solid #e6e6e6; border-radius: calc(5 * var(--s, 1px)); padding: calc(2 * var(--s, 1px)) calc(6 * var(--s, 1px)); margin-right: calc(6 * var(--s, 1px));">Esc</kbd>dismiss the alarm</span>
+          <span><kbd style="font-family: Zodiak, Georgia, serif; font-style: italic; color: #5a5a5a; border: 1px solid #e6e6e6; border-radius: calc(5 * var(--s, 1px)); padding: calc(2 * var(--s, 1px)) calc(6 * var(--s, 1px)); margin-right: calc(6 * var(--s, 1px));">C</kbd>this panel</span>
+          <span><kbd style="font-family: Zodiak, Georgia, serif; font-style: italic; color: #5a5a5a; border: 1px solid #e6e6e6; border-radius: calc(5 * var(--s, 1px)); padding: calc(2 * var(--s, 1px)) calc(6 * var(--s, 1px)); margin-right: calc(6 * var(--s, 1px));">+</kbd>blank shortcut, named in place</span>
         </div>
       </div>
-      <div class="pfoot">
-        <em>Space</em> start / pause &nbsp;·&nbsp; <em>R</em> reset &nbsp;·&nbsp; <em>I</em> invert &nbsp;·&nbsp;
-        <em>Esc</em> dismiss the alarm &nbsp;·&nbsp; <em>+</em> in the row adds a shortcut — while editing,
-        the label and the minutes type in place, the icon opens a picker (or paste any emoji),
-        and the dot is a full colour picker.
+    </sc-if>
+  </div>
+
+  <div ref="{{ rowRef }}" onPointerDown="{{ stop }}" style="display: flex; align-items: center; gap: var(--rgap, 30px); row-gap: var(--rowgap, 12px); margin-top: var(--rowmt, 31px); flex-wrap: var(--rwrap, nowrap);">
+
+    <div ref="{{ stripRef }}" style="position: relative; flex: 1 1 auto; min-width: 0; width: var(--stripw, auto); height: var(--rowh, 50px); transition: height .34s cubic-bezier(.2,.9,.2,1);">
+      <div ref="{{ chipsRef }}" onScroll="{{ onStripScroll }}" style="display: flex; align-items: center; gap: var(--gap, 20px); height: 100%; overflow-x: auto; overflow-y: hidden; padding: calc(5 * var(--s, 1px)) 0; scrollbar-width: none; -ms-overflow-style: none; -webkit-mask-image: var(--fade, none); mask-image: var(--fade, none);">
+
+        <div onClick="{{ pickShort }}" style="position: relative; flex: none; height: 100%; display: inline-flex; align-items: center; justify-content: center; gap: var(--cgap, 10px); padding: 0 var(--cpad, 30px); border: var(--bw, 2.34px) solid #191919; background: #fff; color: #191919; font-weight: 700; font-size: var(--fchip, 21px); line-height: 1; white-space: nowrap; cursor: pointer; border-radius: var(--rcap, 25px) var(--rcap, 25px) 0 var(--rcap, 25px); transition: transform .36s cubic-bezier(.2,.9,.2,1), box-shadow .3s ease, font-size .32s cubic-bezier(.2,.9,.2,1), padding .32s cubic-bezier(.2,.9,.2,1); animation: riseIn .5s cubic-bezier(.2,.9,.2,1) backwards; box-shadow: {{ shortRing }};" style-hover="transform: translateY(calc(-3 * var(--s, 1px)));" style-active="transform: translateY(0) scale(.97);"><em style="font-family: Zodiak, Georgia, serif; font-style: italic; font-weight: 400;">Short</em>Break</div>
+
+        <div onClick="{{ pickLong }}" style="position: relative; flex: none; height: 100%; display: inline-flex; align-items: center; justify-content: center; gap: var(--cgap, 10px); padding: 0 var(--cpad, 30px); border: var(--bw, 2.34px) solid #191919; background: #fff; color: #191919; font-weight: 700; font-size: var(--fchip, 21px); line-height: 1; white-space: nowrap; cursor: pointer; border-radius: var(--rcap, 25px) var(--rcap, 25px) var(--rcap, 25px) 0; transition: transform .36s cubic-bezier(.2,.9,.2,1), box-shadow .3s ease, font-size .32s cubic-bezier(.2,.9,.2,1), padding .32s cubic-bezier(.2,.9,.2,1); animation: riseIn .5s cubic-bezier(.2,.9,.2,1) .06s backwards; box-shadow: {{ longRing }};" style-hover="transform: translateY(calc(-3 * var(--s, 1px)));" style-active="transform: translateY(0) scale(.97);"><em style="font-family: Zodiak, Georgia, serif; font-style: italic; font-weight: 400;">Long</em>Break</div>
+
+        <sc-for list="{{ chips }}" as="chip" hint-placeholder-count="0">
+          <div data-chip="{{ chip.id }}" onClick="{{ chip.onSelect }}" style="position: relative; flex: none; height: 100%; display: inline-flex; align-items: center; justify-content: center; gap: var(--cgap, 10px); padding-right: var(--cpad, 30px); border-width: var(--bw, 2.34px); border-color: #191919; border-style: {{ chip.bstyle }}; font-weight: 700; font-size: var(--fchip, 21px); line-height: 1; white-space: nowrap; transition: transform .36s cubic-bezier(.2,.9,.2,1), box-shadow .3s ease, font-size .32s cubic-bezier(.2,.9,.2,1), gap .32s cubic-bezier(.2,.9,.2,1), padding .3s cubic-bezier(.2,.9,.2,1); animation: riseIn .5s cubic-bezier(.2,.9,.2,1) backwards; padding-left: {{ chip.padLeft }}; background: {{ chip.colour }}; color: {{ chip.ink }}; border-radius: {{ chip.radius }}; box-shadow: {{ chip.ring }}; cursor: {{ chip.cursor }}; animation-delay: {{ chip.delay }};" style-hover="transform: translateY(calc(-3 * var(--s, 1px)));">
+            <button type="button" onClick="{{ chip.onDel }}" aria-label="Remove" style="position: absolute; left: calc(6 * var(--es, 1px)); top: 50%; transform: translateY(-50%); width: calc(32 * var(--es, 1px)); height: calc(32 * var(--es, 1px)); border: 0; border-radius: 50%; background: #fff; cursor: pointer; align-items: center; justify-content: center; padding: 0; transition: width .3s cubic-bezier(.2,.9,.2,1), height .3s cubic-bezier(.2,.9,.2,1); display: {{ chip.delDisp }};"><span style="display: block; width: calc(15 * var(--es, 1px)); height: calc(3.2 * var(--es, 1px)); background: #191919; border-radius: 999px;"></span></button>
+            <span onClick="{{ chip.onEmoji }}" style="font-size: var(--femo, 21px); line-height: 1; transition: transform .3s cubic-bezier(.2,.9,.2,1); cursor: {{ chip.cursor2 }};">{{ chip.emoji }}</span>
+            <span style="position: relative; display: inline-flex; align-items: center; padding-bottom: calc(1 * var(--es, 1px)); border-bottom: calc(1.8 * var(--es, 1px)) dashed transparent; transition: border-color .26s ease; border-bottom-color: {{ chip.lineC }};">
+              <span data-ghost="1" style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); pointer-events: none; white-space: nowrap; font-weight: 400; opacity: .45; display: {{ chip.ghost }};">Name it</span>
+              <span contentEditable="{{ chip.editable }}" suppressContentEditableWarning="{{ true }}" onInput="{{ chip.onName }}" onBlur="{{ chip.onNameBlur }}" onClick="{{ chip.stop }}" onKeyDown="{{ chip.onNameKey }}" style="outline: none; cursor: {{ chip.cursor2 }}; min-width: {{ chip.nameW }};">{{ chip.name }}</span>
+            </span>
+            <span ref="{{ chip.minsRef }}" contentEditable="{{ chip.minsEditable }}" suppressContentEditableWarning="{{ true }}" onPointerDown="{{ chip.minsDown }}" onClick="{{ chip.minsClick }}" onKeyDown="{{ chip.minsKey }}" onBlur="{{ chip.minsBlur }}" style="font-weight: 400; outline: none; border-radius: calc(6 * var(--es, 1px)); text-align: center; border-bottom: calc(1.8 * var(--es, 1px)) dashed transparent; transition: opacity .2s ease, background .2s ease, border-color .26s ease; border-bottom-color: {{ chip.lineC }}; opacity: {{ chip.minsO }}; background: {{ chip.minsBg }}; padding: {{ chip.minsPad }}; min-width: {{ chip.minsW }};">{{ chip.minsText }}</span>
+            <label onClick="{{ chip.stop }}" onPointerDown="{{ chip.stop }}" title="Any colour" style="position: relative; overflow: hidden; width: calc(20 * var(--es, 1px)); height: calc(20 * var(--es, 1px)); border-radius: 50%; border: calc(1.6 * var(--es, 1px)) solid rgba(0,0,0,.3); cursor: pointer; flex: none; transition: width .3s cubic-bezier(.2,.9,.2,1), height .3s cubic-bezier(.2,.9,.2,1); display: {{ chip.swDisp }}; background: {{ chip.colour }};"><input type="color" value="{{ chip.colour }}" onChange="{{ chip.onColour }}" style="position: absolute; inset: calc(-6 * var(--s, 1px)); opacity: 0; cursor: pointer; border: 0; padding: 0;"></label>
+          </div>
+        </sc-for>
+
+        <button type="button" onClick="{{ onAdd }}" aria-label="Add a shortcut" style="flex: none; width: var(--addw, 40px); height: var(--addh, 38.5px); border: 0; cursor: pointer; background: rgba(255,255,255,.76); color: #191919; border-radius: calc(8 * var(--s, 1px)) 0 calc(8 * var(--s, 1px)) 0; font-size: var(--fadd, 27px); line-height: 1; display: inline-flex; align-items: center; justify-content: center; transition: background .2s ease, width .3s cubic-bezier(.2,.9,.2,1), height .3s cubic-bezier(.2,.9,.2,1), font-size .3s cubic-bezier(.2,.9,.2,1), transform .3s cubic-bezier(.2,.9,.2,1);" style-hover="background: #fff; transform: translateY(calc(-2 * var(--s, 1px)));" style-active="transform: scale(.9);">+</button>
+
+        <button type="button" onClick="{{ onDone }}" style="flex: none; height: 100%; padding: 0 var(--dpad, 28px); border: var(--bw, 2.34px) solid #191919; background: #fff; color: #191919; font-weight: 700; font-size: var(--fdone, 20px); line-height: 1; border-radius: var(--rcap, 25px); cursor: pointer; align-items: center; justify-content: center; transition: transform .3s cubic-bezier(.2,.9,.2,1); display: {{ doneDisp }};" style-hover="transform: translateY(calc(-2 * var(--s, 1px)));">Done</button>
       </div>
+    </div>
+
+    <div style="flex: none; display: flex; align-items: center; gap: var(--cgap2, 11px); min-width: 0; width: var(--cw, auto);">
+      <span style="font-weight: 700; font-size: var(--fclabel, 19px); line-height: 1; white-space: nowrap; display: var(--clbl, inline);">custom Time</span>
+      <div ref="{{ trackRef }}" onPointerDown="{{ trackDown }}" style="position: relative; flex: var(--tflex, none); width: var(--trackw, 400px); height: var(--trackh, 32px); border-radius: 999px; background: rgba(255,255,255,.76); cursor: pointer; overflow: hidden; transition: height .3s cubic-bezier(.2,.9,.2,1);">
+        <div style="position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: #fff; min-width: var(--trackh, 32px); transition: width var(--fillt, .34s) cubic-bezier(.2,.9,.2,1); width: {{ fillPct }};"></div>
+      </div>
+      <button type="button" onPointerDown="{{ stepDown }}" aria-label="Less" style="flex: none; width: var(--step, 34px); height: var(--step, 34px); border: 0; cursor: pointer; background: rgba(255,255,255,.76); color: #191919; font-size: var(--fstep, 24px); line-height: 1; display: inline-flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; border-radius: calc(8 * var(--s, 1px)) 0 calc(8 * var(--s, 1px)) 0; transition: background .18s ease, transform .2s cubic-bezier(.2,.9,.2,1);" style-hover="background: #fff;" style-active="transform: scale(.9);">&minus;</button>
+      <span style="font-weight: 400; font-size: var(--fval, 36px); line-height: 1; min-width: var(--valw, 74px); text-align: center; animation: {{ valAnim }};">{{ minutes }}</span>
+      <button type="button" onPointerDown="{{ stepUp }}" aria-label="More" style="flex: none; width: var(--step, 34px); height: var(--step, 34px); border: 0; cursor: pointer; background: rgba(255,255,255,.76); color: #191919; font-size: var(--fstep, 24px); line-height: 1; display: inline-flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; border-radius: 0 calc(8 * var(--s, 1px)) 0 calc(8 * var(--s, 1px)); transition: background .18s ease, transform .2s cubic-bezier(.2,.9,.2,1);" style-hover="background: #fff;" style-active="transform: scale(.9);">+</button>
     </div>
   </div>
 
-  <div id="row">
-    <div id="strip"><div id="chips"></div></div>
-    <div id="custom">
-      <span id="clabel">custom Time</span>
-      <div id="track"><div id="fill"></div></div>
-      <span id="cval">25</span>
+  <sc-if value="{{ dragging }}">
+    <div style="position: absolute; inset: var(--wpad, 12px); border-radius: calc(30 * var(--s, 1px)); z-index: 4; border: 2px dashed rgba(255,255,255,.55); background: rgba(0,0,0,.42); display: flex; align-items: center; justify-content: center; color: #fff; font-size: var(--fdrop, 16px); line-height: 1; letter-spacing: .1em; pointer-events: none; animation: fadeIn .18s ease both;"><em style="font-family: Zodiak, Georgia, serif; font-style: italic; margin-right: 7px; letter-spacing: 0;">Drop</em>AN IMAGE OR A SOUND</div>
+  </sc-if>
+
+  <sc-if value="{{ emojiOn }}">
+    <div onPointerDown="{{ stop }}" style="position: fixed; z-index: 6; background: #fff; border-radius: 14px; padding: 9px; box-shadow: 0 12px 34px rgba(0,0,0,.45); width: 292px; animation: popIn .2s cubic-bezier(.2,.9,.2,1) both; left: {{ emojiX }}; top: {{ emojiY }};">
+      <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; max-height: 200px; overflow-y: auto;">
+        <sc-for list="{{ emojiList }}" as="e" hint-placeholder-count="24">
+          <button type="button" onClick="{{ e.pick }}" style="border: 0; background: none; cursor: pointer; font-size: 19px; line-height: 1; padding: 5px; border-radius: 8px; transition: background .15s ease, transform .2s cubic-bezier(.2,.9,.2,1);" style-hover="background: #eee; transform: scale(1.18);">{{ e.char }}</button>
+        </sc-for>
+      </div>
+      <input ref="{{ emojiInRef }}" type="text" placeholder="Paste or type any emoji" autoComplete="off" onInput="{{ onEmojiIn }}" onKeyDown="{{ onEmojiKey }}" style="width: 100%; margin-top: 7px; border: 1px solid #e0e0e0; border-radius: 9px; padding: 7px 9px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.2; color: #000; outline: none;">
+      <div style="font-size: 10.5px; color: #9a9a9a; margin: 5px 2px 0;">macOS: <b>Ctrl Cmd Space</b> opens the system picker</div>
     </div>
-  </div>
+  </sc-if>
 
-  <div id="drop"><em>Drop</em>AN IMAGE OR A SOUND</div>
+  <input ref="{{ fileRef }}" type="file" accept="image/*" onChange="{{ onFile }}" style="display: none;">
+  <input ref="{{ fileARef }}" type="file" accept="audio/*" onChange="{{ onFileA }}" style="display: none;">
 </div>
 
-<div id="emoji">
-  <input id="emojiIn" type="text" placeholder="Type or paste any emoji…" autocomplete="off">
-  <div class="hint">macOS: <b>Ctrl Cmd Space</b> opens the full picker</div>
-  <div class="grid" id="emojiGrid"></div>
-</div>
-<input id="file"  type="file" accept="image/*">
-<input id="fileA" type="file" accept="audio/*">
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;motion&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Calm&quot;, &quot;Balanced&quot;, &quot;Lively&quot;], &quot;default&quot;: &quot;Balanced&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Motion&quot; },
+  &quot;cursorMagnet&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Motion&quot; },
+  &quot;accent&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#24094A&quot;, &quot;options&quot;: [&quot;#24094A&quot;, &quot;#001697&quot;, &quot;#945F00&quot;, &quot;#0B4B3A&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Card&quot; },
+  &quot;startMinutes&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 25, &quot;min&quot;: 1, &quot;max&quot;: 100, &quot;unit&quot;: &quot;min&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Card&quot; },
+  &quot;maxZoom&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 1.7, &quot;min&quot;: 1, &quot;max&quot;: 2.6, &quot;step&quot;: 0.1, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Card&quot; }
+}">
+class Component extends DCLogic {
+  wrapRef = React.createRef(); cvRef = React.createRef(); cardRef = React.createRef();
+  rowRef = React.createRef(); chipsRef = React.createRef(); stripRef = React.createRef();
+  trackRef = React.createRef(); volRef = React.createRef();
+  fileRef = React.createRef(); fileARef = React.createRef(); emojiInRef = React.createRef();
 
-<script>
-(() => {
-"use strict";
+  /* Geometry, straight out of the Affinity export - the card is 1:1 with
+     the artwork and every DOM size below is written in the same units. */
+  K = {
+    W: 1224, H: 335,
+    CARD: { x: 2, y: 0, w: 1222, h: 335, r: 29.5 },
+    BAR: { x: 2, y: 293.9, h: 41.1, full: 1222 },
+    DOT: { x0: 152, y0: 120, pitch: 10.555556, r: 5.279 },
+    PLAY: { col: 58.5, cols: 6, rows: 10 },
+    POMO: { x: 36, top: 38, w: 201 },
+    page: '#191919', card: '#EBEBEB',
+    SERIF: 'italic 400 SIZEpx Zodiak, Georgia, "Times New Roman", serif'
+  };
+  PAL = ['#90A3FF','#E2B166','#9AD8A6','#F0A0B4','#A6D9E8','#D3B4F2','#EBD97C','#F2A97E','#8FD5C6','#F5B8D0'];
+  EMO = ['📑','🧘','📚','💻','🧪','✍️','🎧','🏃','☕','🍅','🧠','🔬','📝','🎯','🌙','☀️','🎹','🗂','🧹','🛠','💤','🍽','📞','🧾','📐','📊','🗒','🔖','🧮','⌨️','🖊','📖','🎨','🎬','🏋️','🚿','🥗','🧺','🐢','🌱','🔥','⚡️','🌊','🏔','🧊','🕯','🪐','🛰','🎲','♟','🧩','🎸','🥁','🪄','🧿','🩺','💊','🧴','🪥','🧼'];
 
-/* ==================================================================
-   Card geometry. Every number and both checkerboard paths are lifted
-   straight out of the Affinity export, so the card is 1:1 with the
-   artwork. The control row underneath is DOM, sized in the same units.
-   ================================================================== */
+  state = {
+    chips: [], editing: false, active: null, minutes: 25, valFlip: false,
+    panel: 'closed', tools: false, dragging: false, emoji: null, minsEdit: null,
+    invert: false, autoDim: true, loop: true, volume: 0.8,
+    imgName: 'Default gradient', ringName: 'Built-in chime', testing: false
+  };
 
-const W = 1224, H = 335;
+  /* ---------- lifecycle ---------- */
 
-const CARD = { x: 2, y: 0, w: 1222, h: 335, r: 29.5 };
-const BAR  = { x: 2, y: 293.9, h: 41.1, full: 1222 };
-const DOT  = { x0: 152, y0: 120, pitch: 10.555556, r: 5.279 };
+  componentDidMount() {
+    this.cv = this.cvRef.current;
+    this.ctx = this.cv.getContext('2d');
+    this.mask = document.createElement('canvas'); this.mctx = this.mask.getContext('2d');
+    this.tex = document.createElement('canvas'); this.tctx = this.tex.getContext('2d');
+    this.chk = document.createElement('canvas'); this.chkctx = this.chk.getContext('2d');
+    this.fitCache = new Map();
+    this.scale = 1; this.dpr = 1; this.barShown = 0; this.mag = 0; this.entr = 0;
+    this.t0 = performance.now(); this.slots = null; this.play = null; this.ptr = null;
+    this.minsRefs = {};
+    this.ring = new Audio();
+    this.S = { total: 1500000, left: 1500000, running: false, endAt: 0, img: null, dim: 0, alarm: false, press: 0 };
+    this.PBOX = {
+      x: this.K.DOT.x0 + this.K.PLAY.col * this.K.DOT.pitch - this.K.DOT.r - 18,
+      y: this.K.DOT.y0 - this.K.DOT.r - 18,
+      w: (this.K.PLAY.cols - 1) * this.K.DOT.pitch + this.K.DOT.r * 2 + 36,
+      h: (this.K.PLAY.rows - 1) * this.K.DOT.pitch + this.K.DOT.r * 2 + 36
+    };
+    try { this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { this.reduced = false; }
 
-const CHK_LEFT  = new Path2D("M81.48,188.63C81.48,187.52 80.59,186.63 79.48,186.63L69.42,186.63C68.32,186.63 67.42,187.52 67.42,188.63L67.42,207.76L50.29,207.76L50.29,188.63C50.29,187.52 49.40,186.63 48.29,186.63L37.23,186.63C36.12,186.63 35.23,187.52 35.23,188.63L35.23,207.76L18.10,207.76L18.10,188.63C18.10,187.52 17.20,186.63 16.10,186.63L2.00,186.63L2.00,169.50L16.10,169.50C17.20,169.50 18.10,168.61 18.10,167.50L18.10,146.37C18.10,145.27 17.20,144.37 16.10,144.37L2.00,144.37L2.00,127.24L19.13,127.24L19.13,146.37C19.13,147.48 20.02,148.37 21.13,148.37L32.20,148.37C33.30,148.37 34.20,147.48 34.20,146.37L34.20,127.24L51.32,127.24L51.32,146.37C51.32,147.48 52.22,148.37 53.32,148.37L64.39,148.37C65.50,148.37 66.39,147.48 66.39,146.37L66.39,127.24L83.52,127.24L83.52,146.37C83.52,147.48 84.41,148.37 85.52,148.37L95.58,148.37C96.68,148.37 97.58,147.48 97.58,146.37L97.58,127.24L114.71,127.24L114.71,144.37L100.61,144.37C99.51,144.37 98.61,145.27 98.61,146.37L98.61,167.50C98.61,168.61 99.51,169.50 100.61,169.50L114.71,169.50L114.71,186.63L100.61,186.63C99.51,186.63 98.61,187.52 98.61,188.63L98.61,207.76L81.48,207.76L81.48,188.63ZM48.29,169.50C49.40,169.50 50.29,168.61 50.29,167.50L50.29,146.37C50.29,145.27 49.40,144.37 48.29,144.37L37.23,144.37C36.12,144.37 35.23,145.27 35.23,146.37L35.23,167.50C35.23,168.61 36.12,169.50 37.23,169.50L48.29,169.50ZM69.42,144.37C68.32,144.37 67.42,145.27 67.42,146.37L67.42,167.50C67.42,168.61 68.32,169.50 69.42,169.50L79.48,169.50C80.59,169.50 81.48,168.61 81.48,167.50L81.48,146.37C81.48,145.27 80.59,144.37 79.48,144.37L69.42,144.37ZM21.13,165.50C20.02,165.50 19.13,166.40 19.13,167.50L19.13,188.63C19.13,189.73 20.02,190.63 21.13,190.63L32.20,190.63C33.30,190.63 34.20,189.73 34.20,188.63L34.20,167.50C34.20,166.40 33.30,165.50 32.20,165.50L21.13,165.50ZM95.58,190.63C96.68,190.63 97.58,189.73 97.58,188.63L97.58,167.50C97.58,166.40 96.68,165.50 95.58,165.50L85.52,165.50C84.41,165.50 83.52,166.40 83.52,167.50L83.52,188.63C83.52,189.73 84.41,190.63 85.52,190.63L95.58,190.63ZM64.39,190.63C65.50,190.63 66.39,189.73 66.39,188.63L66.39,167.50C66.39,166.40 65.50,165.50 64.39,165.50L53.32,165.50C52.22,165.50 51.32,166.40 51.32,167.50L51.32,188.63C51.32,189.73 52.22,190.63 53.32,190.63L64.39,190.63Z");
-const CHK_RIGHT = new Path2D("M1222.00,175.81L1206.90,175.81C1205.80,175.81 1204.90,176.70 1204.90,177.81L1204.90,198.94C1204.90,200.04 1205.80,200.94 1206.90,200.94L1221.00,200.94L1221.00,218.06L1206.90,218.06C1205.80,218.06 1204.90,218.96 1204.90,220.06L1204.90,239.19C1204.90,240.30 1205.80,241.19 1206.90,241.19L1221.62,241.19L1221.62,258.32L1204.49,258.32L1204.49,241.19C1204.49,240.09 1203.59,239.19 1202.49,239.19L1191.62,239.19C1190.51,239.19 1189.62,240.09 1189.62,241.19L1189.62,258.32L1172.49,258.32L1172.49,241.19C1172.49,240.09 1171.59,239.19 1170.49,239.19L1159.62,239.19C1158.51,239.19 1157.62,240.09 1157.62,241.19L1157.62,258.32L1140.49,258.32L1140.49,241.19C1140.49,240.09 1139.59,239.19 1138.49,239.19L1127.42,239.19C1126.32,239.19 1125.42,240.09 1125.42,241.19L1125.42,259.32L1108.03,259.32C1107.89,259.09 1107.71,258.88 1107.49,258.72L1107.49,242.19C1107.49,241.09 1106.59,240.19 1105.49,240.19L1094.71,240.19C1093.60,240.19 1092.71,241.09 1092.71,242.19L1092.71,259.32L1075.58,259.32L1075.58,242.19C1075.58,241.09 1074.68,240.19 1073.58,240.19L1063.42,240.19C1062.32,240.19 1061.42,241.09 1061.42,242.19L1061.42,259.32L1044.29,259.32L1044.29,242.19C1044.29,241.09 1043.40,240.19 1042.29,240.19L1030.42,240.19C1029.32,240.19 1028.42,241.09 1028.42,242.19L1028.42,259.32L1011.29,259.32L1011.29,242.19L1026.20,242.19C1027.30,242.19 1028.20,241.30 1028.20,240.19L1028.20,221.06C1028.20,219.96 1027.30,219.06 1026.20,219.06L1012.10,219.06L1012.10,201.94L1026.20,201.94C1027.30,201.94 1028.20,201.04 1028.20,199.94L1028.20,179.32C1028.20,178.22 1027.30,177.32 1026.20,177.32L1011.87,177.32L1011.87,159.68L1026.77,159.68C1027.88,159.68 1028.77,158.79 1028.77,157.68L1028.77,139.06C1028.77,137.96 1027.88,137.06 1026.77,137.06L1012.68,137.06L1012.68,119.94L1026.77,119.94C1027.88,119.94 1028.77,119.04 1028.77,117.94L1028.77,96.81C1028.77,95.70 1027.88,94.81 1026.77,94.81L1012.68,94.81L1012.68,77.68L1029.81,77.68L1029.81,96.81C1029.81,97.91 1030.70,98.81 1031.81,98.81L1042.87,98.81C1043.98,98.81 1044.87,97.91 1044.87,96.81L1044.87,77.68L1062.00,77.68L1062.00,96.81C1062.00,97.91 1062.90,98.81 1064.00,98.81L1075.07,98.81C1076.17,98.81 1077.07,97.91 1077.07,96.81L1077.07,77.68L1094.20,77.68L1094.20,96.81C1094.20,97.91 1095.09,98.81 1096.20,98.81L1106.26,98.81C1107.36,98.81 1108.26,97.91 1108.26,96.81L1108.26,76.91C1108.52,76.57 1108.68,76.14 1108.68,75.68L1125.80,75.68L1125.80,94.81C1125.80,95.91 1126.70,96.81 1127.81,96.81L1138.87,96.81C1139.98,96.81 1140.87,95.91 1140.87,94.81L1140.87,75.68L1158.00,75.68L1158.00,94.81C1158.00,95.91 1158.90,96.81 1160.00,96.81L1171.07,96.81C1172.17,96.81 1173.07,95.91 1173.07,94.81L1173.07,75.68L1190.20,75.68L1190.20,94.81C1190.20,95.91 1191.09,96.81 1192.20,96.81L1202.26,96.81C1203.36,96.81 1204.26,95.91 1204.26,94.81L1204.26,75.68L1221.38,75.68L1221.38,92.81L1207.29,92.81C1206.18,92.81 1205.29,93.70 1205.29,94.81L1205.29,115.94C1205.29,117.04 1206.18,117.94 1207.29,117.94L1221.38,117.94L1221.38,135.06L1207.29,135.06C1206.18,135.06 1205.29,135.96 1205.29,137.06L1205.29,156.19C1205.29,157.30 1206.18,158.19 1207.29,158.19L1222.00,158.19L1222.00,175.81ZM1154.97,158.19C1156.07,158.19 1156.97,157.30 1156.97,156.19L1156.97,137.06C1156.97,135.96 1156.07,135.06 1154.97,135.06L1143.90,135.06C1142.80,135.06 1141.90,135.96 1141.90,137.06L1141.90,156.19C1141.90,157.30 1142.80,158.19 1143.90,158.19L1154.97,158.19ZM1154.59,200.94C1155.69,200.94 1156.59,200.04 1156.59,198.94L1156.59,177.81C1156.59,176.70 1155.69,175.81 1154.59,175.81L1143.52,175.81C1142.41,175.81 1141.52,176.70 1141.52,177.81L1141.52,198.94C1141.52,200.04 1142.41,200.94 1143.52,200.94L1154.59,200.94ZM1108.71,239.19C1108.71,240.30 1109.60,241.19 1110.71,241.19L1122.39,241.19C1123.49,241.19 1124.39,240.30 1124.39,239.19L1124.39,221.06C1124.39,219.96 1123.49,219.06 1122.39,219.06L1110.71,219.06C1109.60,219.06 1108.71,219.96 1108.71,221.06L1108.71,239.19ZM1047.32,177.32C1046.22,177.32 1045.32,178.22 1045.32,179.32L1045.32,199.94C1045.32,201.04 1046.22,201.94 1047.32,201.94L1058.39,201.94C1059.50,201.94 1060.39,201.04 1060.39,199.94L1060.39,179.32C1060.39,178.22 1059.50,177.32 1058.39,177.32L1047.32,177.32ZM1029.23,221.06C1029.23,222.17 1030.12,223.06 1031.23,223.06L1042.29,223.06C1043.40,223.06 1044.29,222.17 1044.29,221.06L1044.29,199.94C1044.29,198.83 1043.40,197.94 1042.29,197.94L1031.23,197.94C1030.12,197.94 1029.23,198.83 1029.23,199.94L1029.23,221.06ZM1173.71,198.94C1173.71,200.04 1174.61,200.94 1175.71,200.94L1185.77,200.94C1186.88,200.94 1187.77,200.04 1187.77,198.94L1187.77,177.81C1187.77,176.70 1186.88,175.81 1185.77,175.81L1175.71,175.81C1174.61,175.81 1173.71,176.70 1173.71,177.81L1173.71,198.94ZM1111.29,94.81C1110.18,94.81 1109.29,95.70 1109.29,96.81L1109.29,115.94C1109.29,117.04 1110.18,117.94 1111.29,117.94L1122.77,117.94C1123.88,117.94 1124.77,117.04 1124.77,115.94L1124.77,96.81C1124.77,95.70 1123.88,94.81 1122.77,94.81L1111.29,94.81ZM1078.10,117.94C1078.10,119.04 1078.99,119.94 1080.10,119.94L1090.16,119.94C1091.26,119.94 1092.16,119.04 1092.16,117.94L1092.16,96.81C1092.16,95.70 1091.26,94.81 1090.16,94.81L1080.10,94.81C1078.99,94.81 1078.10,95.70 1078.10,96.81L1078.10,117.94ZM1089.58,242.19C1090.68,242.19 1091.58,241.30 1091.58,240.19L1091.58,221.06C1091.58,219.96 1090.68,219.06 1089.58,219.06L1079.52,219.06C1078.41,219.06 1077.52,219.96 1077.52,221.06L1077.52,240.19C1077.52,241.30 1078.41,242.19 1079.52,242.19L1089.58,242.19ZM1029.81,139.06C1029.81,140.17 1030.70,141.06 1031.81,141.06L1042.87,141.06C1043.98,141.06 1044.87,140.17 1044.87,139.06L1044.87,117.94C1044.87,116.83 1043.98,115.94 1042.87,115.94L1031.81,115.94C1030.70,115.94 1029.81,116.83 1029.81,117.94L1029.81,139.06ZM1079.52,176.81C1078.41,176.81 1077.52,177.70 1077.52,178.81L1077.52,199.94C1077.52,201.04 1078.41,201.94 1079.52,201.94L1089.58,201.94C1090.68,201.94 1091.58,201.04 1091.58,199.94L1091.58,178.81C1091.58,177.70 1090.68,176.81 1089.58,176.81L1079.52,176.81ZM1188.16,137.06C1188.16,135.96 1187.26,135.06 1186.16,135.06L1176.10,135.06C1174.99,135.06 1174.10,135.96 1174.10,137.06L1174.10,156.68C1174.10,157.79 1174.99,158.68 1176.10,158.68L1186.16,158.68C1187.26,158.68 1188.16,157.79 1188.16,156.68L1188.16,137.06ZM1106.26,141.06C1107.36,141.06 1108.26,140.17 1108.26,139.06L1108.26,117.94C1108.26,116.83 1107.36,115.94 1106.26,115.94L1096.20,115.94C1095.09,115.94 1094.20,116.83 1094.20,117.94L1094.20,139.06C1094.20,140.17 1095.09,141.06 1096.20,141.06L1106.26,141.06ZM1058.97,119.94C1060.07,119.94 1060.97,119.04 1060.97,117.94L1060.97,96.81C1060.97,95.70 1060.07,94.81 1058.97,94.81L1047.90,94.81C1046.80,94.81 1045.90,95.70 1045.90,96.81L1045.90,117.94C1045.90,119.04 1046.80,119.94 1047.90,119.94L1058.97,119.94ZM1109.29,156.19C1109.29,157.30 1110.18,158.19 1111.29,158.19L1122.77,158.19C1123.88,158.19 1124.77,157.30 1124.77,156.19L1124.77,139.06C1124.77,137.96 1123.88,137.06 1122.77,137.06L1111.29,137.06C1110.18,137.06 1109.29,137.96 1109.29,139.06L1109.29,156.19ZM1095.62,158.19C1094.51,158.19 1093.62,159.09 1093.62,160.19L1093.62,178.81C1093.62,179.91 1094.51,180.81 1095.62,180.81L1105.68,180.81C1106.78,180.81 1107.68,179.91 1107.68,178.81L1107.68,160.19C1107.68,159.09 1106.78,158.19 1105.68,158.19L1095.62,158.19ZM1092.16,139.06C1092.16,137.96 1091.26,137.06 1090.16,137.06L1080.10,137.06C1078.99,137.06 1078.10,137.96 1078.10,139.06L1078.10,157.68C1078.10,158.79 1078.99,159.68 1080.10,159.68L1090.16,159.68C1091.26,159.68 1092.16,158.79 1092.16,157.68L1092.16,139.06ZM1074.49,223.06C1075.59,223.06 1076.49,222.17 1076.49,221.06L1076.49,199.94C1076.49,198.83 1075.59,197.94 1074.49,197.94L1063.42,197.94C1062.32,197.94 1061.42,198.83 1061.42,199.94L1061.42,221.06C1061.42,222.17 1062.32,223.06 1063.42,223.06L1074.49,223.06ZM1176.10,92.81C1174.99,92.81 1174.10,93.70 1174.10,94.81L1174.10,115.94C1174.10,117.04 1174.99,117.94 1176.10,117.94L1186.16,117.94C1187.26,117.94 1188.16,117.04 1188.16,115.94L1188.16,94.81C1188.16,93.70 1187.26,92.81 1186.16,92.81L1176.10,92.81ZM1075.07,141.06C1076.17,141.06 1077.07,140.17 1077.07,139.06L1077.07,117.94C1077.07,116.83 1076.17,115.94 1075.07,115.94L1064.00,115.94C1062.90,115.94 1062.00,116.83 1062.00,117.94L1062.00,139.06C1062.00,140.17 1062.90,141.06 1064.00,141.06L1075.07,141.06ZM1191.81,156.19C1190.71,156.19 1189.81,157.09 1189.81,158.19L1189.81,177.81C1189.81,178.91 1190.71,179.81 1191.81,179.81L1201.87,179.81C1202.98,179.81 1203.87,178.91 1203.87,177.81L1203.87,158.19C1203.87,157.09 1202.98,156.19 1201.87,156.19L1191.81,156.19ZM1187.77,220.06C1187.77,218.96 1186.88,218.06 1185.77,218.06L1175.71,218.06C1174.61,218.06 1173.71,218.96 1173.71,220.06L1173.71,239.19C1173.71,240.30 1174.61,241.19 1175.71,241.19L1185.77,241.19C1186.88,241.19 1187.77,240.30 1187.77,239.19L1187.77,220.06ZM1154.97,117.94C1156.07,117.94 1156.97,117.04 1156.97,115.94L1156.97,94.81C1156.97,93.70 1156.07,92.81 1154.97,92.81L1143.90,92.81C1142.80,92.81 1141.90,93.70 1141.90,94.81L1141.90,115.94C1141.90,117.04 1142.80,117.94 1143.90,117.94L1154.97,117.94ZM1105.68,223.06C1106.78,223.06 1107.68,222.17 1107.68,221.06L1107.68,199.94C1107.68,198.83 1106.78,197.94 1105.68,197.94L1095.62,197.94C1094.51,197.94 1093.62,198.83 1093.62,199.94L1093.62,221.06C1093.62,222.17 1094.51,223.06 1095.62,223.06L1105.68,223.06ZM1125.80,137.06C1125.80,138.17 1126.70,139.06 1127.81,139.06L1138.87,139.06C1139.98,139.06 1140.87,138.17 1140.87,137.06L1140.87,115.94C1140.87,114.83 1139.98,113.94 1138.87,113.94L1127.81,113.94C1126.70,113.94 1125.80,114.83 1125.80,115.94L1125.80,137.06ZM1170.68,222.06C1171.79,222.06 1172.68,221.17 1172.68,220.06L1172.68,198.94C1172.68,197.83 1171.79,196.94 1170.68,196.94L1159.62,196.94C1158.51,196.94 1157.62,197.83 1157.62,198.94L1157.62,220.06C1157.62,221.17 1158.51,222.06 1159.62,222.06L1170.68,222.06ZM1062.00,178.81C1062.00,179.91 1062.90,180.81 1064.00,180.81L1074.49,180.81C1075.59,180.81 1076.49,179.91 1076.49,178.81L1076.49,160.19C1076.49,159.09 1075.59,158.19 1074.49,158.19L1064.00,158.19C1062.90,158.19 1062.00,159.09 1062.00,160.19L1062.00,178.81ZM1158.05,177.77L1157.62,177.33L1157.62,177.80L1159.62,179.81L1170.68,179.81C1171.79,179.81 1172.68,178.91 1172.68,177.81L1172.68,158.19C1172.68,157.09 1171.79,156.19 1170.68,156.19L1160.00,156.19C1158.90,156.19 1158.00,157.09 1158.00,158.19L1158.00,177.32C1158.00,177.47 1158.02,177.62 1158.05,177.77ZM1159.62,179.32L1159.57,179.27L1159.62,179.28L1159.62,179.32ZM1154.59,241.19C1155.69,241.19 1156.59,240.30 1156.59,239.19L1156.59,220.06C1156.59,218.96 1155.69,218.06 1154.59,218.06L1143.52,218.06C1142.41,218.06 1141.52,218.96 1141.52,220.06L1141.52,239.19C1141.52,240.30 1142.41,241.19 1143.52,241.19L1154.59,241.19ZM1045.90,157.68C1045.90,158.79 1046.80,159.68 1047.90,159.68L1058.97,159.68C1060.07,159.68 1060.97,158.79 1060.97,157.68L1060.97,139.06C1060.97,137.96 1060.07,137.06 1058.97,137.06L1047.90,137.06C1046.80,137.06 1045.90,137.96 1045.90,139.06L1045.90,157.68ZM1201.87,222.06C1202.98,222.06 1203.87,221.17 1203.87,220.06L1203.87,198.94C1203.87,197.83 1202.98,196.94 1201.87,196.94L1191.81,196.94C1190.71,196.94 1189.81,197.83 1189.81,198.94L1189.81,220.06C1189.81,221.17 1190.71,222.06 1191.81,222.06L1201.87,222.06ZM1125.42,220.06C1125.42,221.17 1126.32,222.06 1127.42,222.06L1138.49,222.06C1139.59,222.06 1140.49,221.17 1140.49,220.06L1140.49,198.94C1140.49,197.83 1139.59,196.94 1138.49,196.94L1127.42,196.94C1126.32,196.94 1125.42,197.83 1125.42,198.94L1125.42,220.06ZM1110.71,177.32C1109.60,177.32 1108.71,178.22 1108.71,179.32L1108.71,198.94C1108.71,200.04 1109.60,200.94 1110.71,200.94L1122.39,200.94C1123.49,200.94 1124.39,200.04 1124.39,198.94L1124.39,179.32C1124.39,178.22 1123.49,177.32 1122.39,177.32L1110.71,177.32ZM1126.00,177.81C1126.00,178.91 1126.90,179.81 1128.00,179.81L1138.49,179.81C1139.59,179.81 1140.49,178.91 1140.49,177.81L1140.49,158.19C1140.49,157.09 1139.59,156.19 1138.49,156.19L1128.00,156.19C1126.90,156.19 1126.00,157.09 1126.00,158.19L1126.00,177.81ZM1202.26,139.06C1203.36,139.06 1204.26,138.17 1204.26,137.06L1204.26,115.94C1204.26,114.83 1203.36,113.94 1202.26,113.94L1192.20,113.94C1191.09,113.94 1190.20,114.83 1190.20,115.94L1190.20,137.06C1190.20,138.17 1191.09,139.06 1192.20,139.06L1202.26,139.06ZM1058.39,242.19C1059.50,242.19 1060.39,241.30 1060.39,240.19L1060.39,221.06C1060.39,219.96 1059.50,219.06 1058.39,219.06L1047.32,219.06C1046.22,219.06 1045.32,219.96 1045.32,221.06L1045.32,240.19C1045.32,241.30 1046.22,242.19 1047.32,242.19L1058.39,242.19ZM1158.00,137.06C1158.00,138.17 1158.90,139.06 1160.00,139.06L1171.07,139.06C1172.17,139.06 1173.07,138.17 1173.07,137.06L1173.07,115.94C1173.07,114.83 1172.17,113.94 1171.07,113.94L1160.00,113.94C1158.90,113.94 1158.00,114.83 1158.00,115.94L1158.00,137.06ZM1031.23,158.19C1030.12,158.19 1029.23,159.09 1029.23,160.19L1029.23,178.81C1029.23,179.91 1030.12,180.81 1031.23,180.81L1042.29,180.81C1043.40,180.81 1044.29,179.91 1044.29,178.81L1044.29,160.19C1044.29,159.09 1043.40,158.19 1042.29,158.19L1031.23,158.19Z");
+    this.restore();
+    const m = Math.max(1, Math.min(100, Math.round(this.props.startMinutes ?? 25)));
+    this.curMin = m; this.S.total = this.S.left = m * 60000;
+    if (m !== this.state.minutes) this.setState({ minutes: m });
 
-const PLAY = { col: 58.5, cols: 6, rows: 10 };
-const PLAY_BOX = {
-  x: DOT.x0 + PLAY.col * DOT.pitch - DOT.r - 18,
-  y: DOT.y0 - DOT.r - 18,
-  w: (PLAY.cols - 1) * DOT.pitch + DOT.r * 2 + 36,
-  h: (PLAY.rows - 1) * DOT.pitch + DOT.r * 2 + 36
-};
+    this.on(window, 'resize', this.resize);
+    this.on(window, 'keydown', this.onKey);
+    this.on(window, 'pointerdown', this.onOutside);
+    this.on(window, 'dragenter', this.onDragEnter);
+    this.on(window, 'dragover', this.prevent);
+    this.on(window, 'dragleave', this.onDragLeave);
+    this.on(window, 'drop', this.onDrop);
+    this.on(window, 'paste', this.onPaste);
+    this.on(this.cv, 'pointerdown', this.onCardDown);
+    this.on(this.cv, 'pointermove', this.onCardMove);
+    this.on(this.cv, 'pointerleave', this.onCardOut);
+    if (window.ResizeObserver && this.wrapRef.current.parentElement) {
+      this.ro = new ResizeObserver(() => this.resize());
+      this.ro.observe(this.wrapRef.current.parentElement);
+    }
+    this.beat = setInterval(this.elapse, 500);
 
-const POMO = { x: 36, top: 38, w: 201 };
-
-const C = { page: "#191919", card: "#EBEBEB", pomo: "#24094A" };
-const SERIF = 'italic 400 SIZEpx Zodiak, Georgia, "Times New Roman", serif';
-
-/* The clock is Array, halftoned onto a 10-row grid. These bitmaps were
-   sampled from the real font at the design's own cell size, and 0/1/2/:
-   match the artwork dot for dot -- so nothing has to load at runtime. */
-const GLYPHS = {
-  "0": ["..####..",".######.",".##..##.","##....##","##....##","##....##","##....##",".##..##.",".######.","..####.."],
-  "1": ["..##..",".###..","####..","..##..","..##..","..##..","..##..","..##..","######","######"],
-  "2": [".#####.","#######","#....##",".....##","....##.","...##..","..##...",".##....","#######","#######"],
-  "3": [".#####.","#######","#....##",".....##","..####.","..####.",".....##","#....##","#######",".#####."],
-  "4": [".....##..","....###..","...####..","..##.##..",".##..##..","#########","#########",".....##..",".....##..",".....##.."],
-  "5": [".######",".######",".#.....",".#.....",".#####.",".######",".....##","#....##","#######",".#####."],
-  "6": ["..####..",".######.",".##...#.","##......","######..","########","##....##","###...##",".######.","..####.."],
-  "7": ["#######","#######","....##.","....##.","...##..","...##..","..##...","..##...",".##....",".##...."],
-  "8": [".#####.","#######","##...##","##...##",".#####.",".#####.","##...##","##...##","#######",".#####."],
-  "9": ["..####..",".######.","##...###","##....##","########","..######","......##",".#...##.",".######.","..####.."],
-  ":": ["..","..","##","##","..","..","..","..","##","##"],
-  "play":  ["##....","###...","####..","#####.","######","######","#####.","####..","###...","##...."],
-  "pause": ["##..##","##..##","##..##","##..##","##..##","##..##","##..##","##..##","##..##","##..##"],
-  "stop":  ["......","......","######","######","######","######","######","######","......","......"]
-};
-
-
-/* ================================================================== */
-
-const cv   = document.getElementById("c");
-const ctx  = cv.getContext("2d");
-const mask = document.createElement("canvas");
-const mctx = mask.getContext("2d");
-const tex  = document.createElement("canvas");
-const tctx = tex.getContext("2d");
-const wrap = document.getElementById("wrap");
-
-let scale = 1, dpr = 1;
-
-function resize() {
-  const box = wrap.getBoundingClientRect();
-  const avail = Math.max(320, box.width - 24);
-  // the row eats 56.5 design units of height below the card
-  scale = Math.min(avail / W, Math.max(140, window.innerHeight - 40) / (H + 81));
-  dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-  for (const cnv of [cv, mask, tex]) {
-    cnv.width  = Math.round(W * scale * dpr);
-    cnv.height = Math.round(H * scale * dpr);
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persisted().then(ok => ok ? null : navigator.storage.persist()).catch(() => {});
+    }
+    const go = () => {
+      if (!this.ctx) return;
+      if (!window.POMO_ART) { this.artWait = setTimeout(go, 30); this.resize(); return; }
+      this.paths();
+      this.computeDim();
+      this.resize();
+    };
+    go();
+    this.raf = requestAnimationFrame(this.tick);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { this.fitCache.clear(); });
   }
-  cv.style.width  = Math.round(W * scale) + "px";
-  cv.style.height = Math.round(H * scale) + "px";
-  wrap.style.setProperty("--s", scale + "px");
-  measureStrip();
-  draw();
-}
 
-function setup(c) {
-  c.setTransform(1, 0, 0, 1, 0, 0);
-  c.clearRect(0, 0, c.canvas.width, c.canvas.height);
-  c.scale(scale * dpr, scale * dpr);
-}
-
-function rr(c, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  c.beginPath();
-  c.moveTo(x + r, y);
-  c.arcTo(x + w, y,     x + w, y + h, r);
-  c.arcTo(x + w, y + h, x,     y + h, r);
-  c.arcTo(x,     y + h, x,     y,     r);
-  c.arcTo(x,     y,     x + w, y,     r);
-  c.closePath();
-}
-
-/* ---------- state ---------- */
-
-const S = {
-  minutes: 25, total: 25 * 60000, left: 25 * 60000,
-  running: false, endAt: 0,
-  img: null, dim: 0,
-  invert: false, autoDim: true,
-  alarm: false, loop: true, volume: 0.8,
-  active: null,           // id of the chip that set the current duration
-  hover: null, press: 0,
-  editing: false,
-  chips: []               // { id, name, emoji, colour, minutes }
-};
-
-/* ---------- text sized by ink width ---------- */
-
-const fitCache = new Map();
-function fit(tpl, text, targetW) {
-  const key = tpl + "|" + text + "|" + targetW;
-  if (fitCache.has(key)) return fitCache.get(key);
-  let lo = 4, hi = 200;
-  for (let i = 0; i < 22; i++) {
-    const mid = (lo + hi) / 2;
-    ctx.font = tpl.replace("SIZE", mid.toFixed(2));
-    if (ctx.measureText(text).width > targetW) hi = mid; else lo = mid;
+  componentWillUnmount() {
+    (this.binds || []).forEach(([t, e, f]) => t.removeEventListener(e, f));
+    cancelAnimationFrame(this.raf); clearInterval(this.beat); clearTimeout(this.artWait);
+    clearTimeout(this.holdT); clearInterval(this.holdI);
+    if (this.ro) this.ro.disconnect();
+    this.stopAlarm(); this.ctx = null;
   }
-  fitCache.set(key, lo);
-  return lo;
-}
 
-function inkText(c, text, tpl, size, colour, x, y) {
-  c.font = tpl.replace("SIZE", size.toFixed(2));
-  c.fillStyle = colour;
-  c.textAlign = "left"; c.textBaseline = "alphabetic";
-  const m = c.measureText(text);
-  const lead = (m.actualBoundingBoxLeft !== undefined) ? -m.actualBoundingBoxLeft : 0;
-  c.fillText(text, x - lead, y);
-}
-
-function dotGlyph(c, g, col, radius) {
-  const w = g[0].length;
-  for (let r = 0; r < g.length; r++) {
-    for (let k = 0; k < w; k++) {
-      if (g[r][k] !== "#") continue;
-      c.beginPath();
-      c.arc(DOT.x0 + (col + k) * DOT.pitch, DOT.y0 + r * DOT.pitch, radius, 0, Math.PI * 2);
-      c.fill();
+  componentDidUpdate(prev, prevState) {
+    if (prev.maxZoom !== this.props.maxZoom) this.resize();
+    if (prevState.chips.length !== this.state.chips.length || prevState.editing !== this.state.editing) this.resize();
+    if (this.state.minsEdit && this.minsRefs[this.state.minsEdit] && this.pendingCaret) {
+      this.pendingCaret = false;
+      const el = this.minsRefs[this.state.minsEdit];
+      el.focus();
+      const r = document.createRange(); r.selectNodeContents(el);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
     }
   }
-}
 
-function drawMaskInto(c, clock, progress, unit) {
-  c.save();
-  c.scale(unit, unit);
-  rr(c, CARD.x, CARD.y, CARD.w, CARD.h, CARD.r);
-  c.clip();
-  c.fillStyle = "#fff";
-  c.fill(CHK_LEFT);
-  c.fill(CHK_RIGHT);
+  on(t, e, f) { (this.binds = this.binds || []).push([t, e, f]); t.addEventListener(e, f, e === 'wheel' ? { passive: true } : false); }
+  prevent = e => e.preventDefault();
+  stop = e => e.stopPropagation();
 
-  let col = 0;
-  for (const ch of clock) {
-    const g = GLYPHS[ch];
-    if (!g) { col += 4; continue; }
-    dotGlyph(c, g, col, DOT.r);
-    col += g[0].length + 1;               // one blank column between glyphs
+  /* ---------- fluid sizing ----------
+     One design unit (--s) drives everything. Sizes get a px floor so the
+     row stays legible when the card is squeezed into a narrow embed. */
+
+  sizes(s, stacked, vw, ed) {
+    const m = (px, u) => Math.max(px, u * s);
+    const e = (px, u) => Math.max(px, u * s) * ed;
+    return {
+      s, es: s * ed, wpad: Math.max(8, 12 * s), cardw: this.K.W * s,
+      rowh: e(34, 50), rowmt: m(14, 31), gap: e(10, 20), rgap: stacked ? m(10, 20) : m(14, 30),
+      rowgap: m(10, 16), cpad: e(15, 30), cgap: e(6, 10), fchip: e(12.5, 21), femo: e(13, 21),
+      rcap: e(11, 25), bw: Math.max(1.5, 2.34 * s) * ed, addw: e(28, 40), addh: e(27, 38.5), fadd: e(19, 27),
+      dpad: e(15, 28), fdone: e(12, 20), trackh: m(16, 32), fval: m(20, 36), valw: m(36, 74),
+      fclabel: m(12.5, 19), step: m(26, 34), fstep: m(17, 24), cgap2: m(7, 11),
+      ftool: m(11, 13), ftooli: m(11.5, 14), tpadv: m(6, 8), tpadh: m(11, 15),
+      ppad: m(13, 20), ppadh: m(15, 26), pgap: m(8, 12), pgapx: m(16, 30), pgapy: m(3, 4),
+      fpt: m(15, 20), fpsub: m(13, 17), fpx: m(18, 22), fph: m(12.5, 15), fprow: m(11, 12.5),
+      fpname: m(10, 11.5), fpfoot: m(9.5, 11), fmini: m(10.5, 12), minipv: m(6, 7), miniph: m(10, 12),
+      prow: m(7, 10), swW: m(30, 36), swH: m(17, 20), volw: m(64, 96), fdrop: m(12, 16), prowh: m(28, 34)
+    };
   }
 
-  const tapped = performance.now() - S.press < 160;
-  let grow = tapped ? 0.82 : (S.hover === "play" ? 1.14 : 1);
-  if (S.alarm) grow *= 1 + 0.12 * Math.sin(performance.now() / 150);
-  dotGlyph(c, GLYPHS[S.alarm ? "stop" : (S.running ? "pause" : "play")], PLAY.col, DOT.r * grow);
+  resize = () => {
+    const wrap = this.wrapRef.current; if (!wrap || !this.ctx) return;
+    const host = wrap.parentElement;
+    const vw = Math.max(240, Math.min(window.innerWidth || 9999, (host && host.clientWidth) || 9999));
+    const vh = Math.max(180, window.innerHeight || 600);
+    const stacked = vw < 780 || this.state.chips.length >= 3 || this.state.editing;
+    /* Editing is a mode, not a tooltip: the whole shortcut row steps up a
+       size so the inline delete, icon, minutes and colour dot are real
+       targets. The card yields the height. */
+    const ed = this.state.editing ? 1.32 : 1;
+    let s = Math.min(vw / this.K.W, vh / (this.K.H + (stacked ? 150 : 95)));
+    let z = this.sizes(s, stacked, vw, ed);
+    for (let i = 0; i < 4; i++) {
+      const second = stacked ? Math.max(z.trackh, z.step, z.fval * 1.1) + z.rowgap : 0;
+      const below = z.rowh + z.rowmt + second + z.wpad * 2 + 2;
+      s = Math.max(0.11, Math.min((vw - z.wpad * 2) / this.K.W, (vh - below) / this.K.H, this.props.maxZoom ?? 1.7));
+      z = this.sizes(s, stacked, vw, ed);
+    }
+    this.scale = s;
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-  const bw = Math.max(0, Math.min(BAR.full, progress * BAR.full));
-  if (bw > 0) c.fillRect(BAR.x, BAR.y, bw, BAR.h);
-  c.restore();
-}
+    const V = {
+      '--s': s + 'px', '--es': z.es + 'px', '--cardw': (z.cardw + z.wpad * 2) + 'px', '--wpad': z.wpad + 'px',
+      '--rowh': z.rowh + 'px', '--rowmt': z.rowmt + 'px', '--gap': z.gap + 'px', '--rgap': z.rgap + 'px',
+      '--rowgap': z.rowgap + 'px', '--cpad': z.cpad + 'px', '--cgap': z.cgap + 'px',
+      '--fchip': z.fchip + 'px', '--femo': z.femo + 'px', '--rcap': z.rcap + 'px', '--bw': z.bw + 'px',
+      '--addw': z.addw + 'px', '--addh': z.addh + 'px', '--fadd': z.fadd + 'px',
+      '--dpad': z.dpad + 'px', '--fdone': z.fdone + 'px', '--trackh': z.trackh + 'px',
+      '--fval': z.fval + 'px', '--valw': z.valw + 'px', '--fclabel': z.fclabel + 'px',
+      '--step': z.step + 'px', '--fstep': z.fstep + 'px', '--cgap2': z.cgap2 + 'px',
+      '--ftool': z.ftool + 'px', '--ftooli': z.ftooli + 'px', '--tpadv': z.tpadv + 'px', '--tpadh': z.tpadh + 'px',
+      '--ppad': z.ppad + 'px', '--ppadh': z.ppadh + 'px', '--pgap': z.pgap + 'px',
+      '--pgapx': z.pgapx + 'px', '--pgapy': z.pgapy + 'px', '--fpt': z.fpt + 'px', '--fpsub': z.fpsub + 'px',
+      '--fpx': z.fpx + 'px', '--fph': z.fph + 'px', '--fprow': z.fprow + 'px', '--fpname': z.fpname + 'px',
+      '--fpfoot': z.fpfoot + 'px', '--fmini': z.fmini + 'px', '--minipv': z.minipv + 'px',
+      '--miniph': z.miniph + 'px', '--prow': z.prow + 'px', '--swW': z.swW + 'px', '--swH': z.swH + 'px',
+      '--volw': z.volw + 'px', '--fdrop': z.fdrop + 'px', '--prowh': z.prowh + 'px',
+      '--pdivl': vw < 620 ? 'none' : '1px solid #ececec',
+      '--pcolpl': vw < 620 ? '0px' : z.pgapx + 'px',
+      '--pgrid': vw < 620 ? '1fr' : vw < 900 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+      '--rwrap': stacked ? 'wrap' : 'nowrap',
+      '--stripw': stacked ? '100%' : 'auto',
+      '--cw': stacked ? '100%' : 'auto',
+      '--clbl': vw < 430 ? 'none' : 'inline',
+      '--tflex': stacked ? '1 1 auto' : 'none',
+      '--trackw': stacked ? 'auto' : Math.round(Math.max(120, Math.min(400 * s, (vw - 24) * 0.3))) + 'px'
+    };
+    for (const k in V) wrap.style.setProperty(k, V[k]);
 
-function buildMask(clock, progress) {
-  setup(mctx);
-  drawMaskInto(mctx, clock, progress, 1);
-}
+    const px = Math.round(this.K.W * s * this.dpr), py = Math.round(this.K.H * s * this.dpr);
+    for (const cnv of [this.cv, this.mask, this.tex, this.chk]) { cnv.width = px; cnv.height = py; }
+    this.paths(); this.buildChecker(); this.fitCache.clear(); this.measureStrip();
+  };
 
-/* ---------- the artwork revealed through the mask ---------- */
-
-let fallback = null;
-function fallbackImage() {
-  if (fallback) return fallback;
-  const n = document.createElement("canvas");
-  n.width = 1000; n.height = 300;
-  const g = n.getContext("2d");
-  const grad = g.createLinearGradient(0, 300, 1000, 0);
-  grad.addColorStop(0.00, "#131A5E");
-  grad.addColorStop(0.28, "#5B2E93");
-  grad.addColorStop(0.54, "#C43C6B");
-  grad.addColorStop(0.78, "#F0842F");
-  grad.addColorStop(1.00, "#FFD873");
-  g.fillStyle = grad; g.fillRect(0, 0, 1000, 300);
-  // a few big soft blobs for depth, kept sparse so the colour stays saturated
-  g.globalCompositeOperation = "overlay";
-  for (let i = 0; i < 14; i++) {
-    g.globalAlpha = 0.10 + Math.random() * 0.14;
-    g.fillStyle = i % 2 ? "#fff" : "#2A0F4A";
-    g.beginPath();
-    g.arc(Math.random() * 1000, Math.random() * 300, 120 + Math.random() * 220, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.globalCompositeOperation = "source-over";
-  g.globalAlpha = 1;
-  fallback = n;
-  return n;
-}
-
-function paintImage(c, src, unit, dim) {
-  c.save();
-  c.scale(unit, unit);
-  rr(c, CARD.x, CARD.y, CARD.w, CARD.h, CARD.r);
-  c.clip();
-  const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
-  const s = Math.max(CARD.w / sw, CARD.h / sh);                 // cover-fit over the card
-  const dw = sw * s, dh = sh * s;
-  c.drawImage(src, CARD.x + (CARD.w - dw) / 2, CARD.y + (CARD.h - dh) / 2, dw, dh);
-  if (dim > 0) {
-    c.fillStyle = "rgba(0,0,0," + dim.toFixed(3) + ")";
-    c.fillRect(CARD.x, CARD.y, CARD.w, CARD.h);
-  }
-  c.restore();
-}
-
-/* Auto-dim: measure how bright the image is where it actually meets the
-   #EBEBEB shapes -- inside them normally, around them when inverted --
-   then lay down just enough black for the edge to read. Runs once per
-   image, not per frame. */
-const CARD_LUM   = 0.831;   // relative luminance of #EBEBEB
-const MIN_RATIO  = 2.7;     // contrast we want against the card
-const MAX_DIM    = 0.68;
-
-function relLum(r, g, b) {
-  const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-}
-
-function computeDim() {
-  if (!S.autoDim) { S.dim = 0; return; }
-  const src = S.img || fallbackImage();
-  const unit = 0.22;                                     // ~269 x 74 probe
-  const n = document.createElement("canvas");
-  n.width  = Math.round(W * unit);
-  n.height = Math.round(H * unit);
-  const g = n.getContext("2d", { willReadFrequently: true });
-  paintImage(g, src, unit, 0);
-  g.globalCompositeOperation = S.invert ? "destination-out" : "destination-in";
-  drawMaskInto(g, "100:00", 1, unit);                    // widest clock + full bar
-  g.globalCompositeOperation = "source-over";
-
-  let d;
-  try { d = g.getImageData(0, 0, n.width, n.height).data; } catch (e) { S.dim = 0; return; }
-  let sum = 0, count = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3] < 128) continue;
-    sum += relLum(d[i], d[i + 1], d[i + 2]);
-    count++;
-  }
-  if (!count) { S.dim = 0; return; }
-
-  const L = sum / count;
-  const target = (CARD_LUM + 0.05) / MIN_RATIO - 0.05;   // max luminance we'll allow
-  if (L <= target) { S.dim = 0; return; }
-  // black at alpha a scales sRGB by (1-a); luminance follows roughly (1-a)^2.4
-  S.dim = Math.min(MAX_DIM, Math.max(0, 1 - Math.pow(target / L, 1 / 2.4)));
-}
-
-function paintTexture() {
-  setup(tctx);
-  paintImage(tctx, S.img || fallbackImage(), 1, S.dim);
-  // normal: keep only what's inside the shapes.
-  // invert: keep everything except the shapes, so the card shows through them.
-  tctx.globalCompositeOperation = S.invert ? "destination-out" : "destination-in";
-  tctx.setTransform(1, 0, 0, 1, 0, 0);
-  tctx.drawImage(mask, 0, 0);
-  tctx.globalCompositeOperation = "source-over";
-}
-
-/* ---------- draw ---------- */
-
-function clockText() {
-  const secs = Math.max(0, Math.ceil(S.left / 1000));
-  return String(Math.floor(secs / 60)).padStart(2, "0") + ":" + String(secs % 60).padStart(2, "0");
-}
-
-function draw() {
-  const progress = S.total > 0 ? 1 - S.left / S.total : 0;
-  buildMask(clockText(), progress);
-  paintTexture();
-
-  setup(ctx);
-  ctx.fillStyle = C.page;
-  ctx.fillRect(0, 0, W, H);
-
-  rr(ctx, CARD.x, CARD.y, CARD.w, CARD.h, CARD.r);
-  ctx.fillStyle = C.card; ctx.fill();
-
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(tex, 0, 0);
-  ctx.restore();
-
-  const ps = fit(SERIF, "pomodoro", POMO.w);
-  ctx.font = SERIF.replace("SIZE", ps.toFixed(2));
-  const asc = ctx.measureText("pomodoro").actualBoundingBoxAscent || ps * 0.72;
-  inkText(ctx, "pomodoro", SERIF, ps, S.invert ? C.card : C.pomo, POMO.x, POMO.top + asc);
-}
-
-/* ---------- timer ---------- */
-
-function setMinutes(m, activeId, start) {
-  S.minutes = Math.max(1, Math.min(100, Math.round(m)));
-  S.total = S.minutes * 60000;
-  S.left = S.total;
-  S.active = activeId || null;
-  if (start) { S.endAt = Date.now() + S.left; S.running = true; }
-  else S.running = false;
-  syncRow();
-  draw();
-}
-
-function toggle() {
-  if (S.alarm) { dismiss(); return; }
-  if (S.running) { S.left = Math.max(0, S.endAt - Date.now()); S.running = false; }
-  else           { S.endAt = Date.now() + S.left;              S.running = true;  }
-  S.press = performance.now();
-  draw();
-}
-
-/* Wall-clock, not accumulated frame deltas -- a backgrounded tab throttles
-   requestAnimationFrame, and the countdown would otherwise fall behind. */
-function elapse() {
-  if (!S.running) return;
-  S.left = S.endAt - Date.now();
-  if (S.left <= 0) { S.left = 0; S.running = false; done(); }
-}
-
-function tick(now) {
-  elapse();
-  if (S.running || S.alarm || now - S.press < 200) draw();
-  requestAnimationFrame(tick);
-}
-requestAnimationFrame(tick);
-setInterval(elapse, 500);        // keeps ticking, and fires, while hidden
-
-/* ---------- alarm ---------- */
-
-const ring = new Audio();
-let ringURL = null, chimeTimer = null, audioCtx = null;
-
-function chime() {
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    [0, 0.22, 0.44].forEach((d, i) => {
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = "sine"; o.frequency.value = 660 + i * 110;
-      const peak = Math.max(0.0002, 0.2 * S.volume);
-      g.gain.setValueAtTime(0.0001, audioCtx.currentTime + d);
-      g.gain.exponentialRampToValueAtTime(peak,   audioCtx.currentTime + d + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d + 0.18);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(audioCtx.currentTime + d); o.stop(audioCtx.currentTime + d + 0.2);
+  measureStrip = () => {
+    requestAnimationFrame(() => {
+      const el = this.chipsRef.current; if (!el) return;
+      const over = el.scrollWidth - el.clientWidth;
+      const L = el.scrollLeft > 2, R = over > 2 && el.scrollLeft < over - 2;
+      const f = Math.max(18, 50 * this.scale) + 'px';
+      const g = L && R ? `linear-gradient(90deg,transparent 0,#000 ${f},#000 calc(100% - ${f}),transparent 100%)`
+        : L ? `linear-gradient(90deg,transparent 0,#000 ${f},#000 100%)`
+        : R ? `linear-gradient(90deg,#000 0,#000 calc(100% - ${f}),transparent 100%)` : 'none';
+      if (this.wrapRef.current) this.wrapRef.current.style.setProperty('--fade', g);
     });
-  } catch (e) {}
-}
+  };
 
-function playAlarm(preview) {
-  const loop = preview ? false : S.loop;
-  if (ringURL) {
-    ring.loop = loop;
-    ring.volume = S.volume;
-    try { ring.currentTime = 0; } catch (e) {}
-    ring.play().catch(() => {});
-    if (!loop && !preview) ring.onended = () => dismiss();
-  } else {
-    chime();
-    if (loop) chimeTimer = setInterval(chime, 2100);
+  /* ---------- motion ---------- */
+
+  motion() {
+    const lvl = this.props.motion || 'Balanced';
+    const k = lvl === 'Calm' ? 0.42 : lvl === 'Lively' ? 1.75 : 1;
+    if (this.reduced) return { amb: 0, mag: 0, ripple: 0, k: 0 };
+    return { amb: 0.055 * k, mag: (this.props.cursorMagnet ?? true) ? 0.5 * k : 0, ripple: 0.26 * k, k };
   }
-}
 
-function stopAlarm() {
-  ring.pause();
-  ring.onended = null;
-  try { ring.currentTime = 0; } catch (e) {}
-  if (chimeTimer) { clearInterval(chimeTimer); chimeTimer = null; }
-}
+  clamp(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+  ease(p) { return 1 - Math.pow(1 - p, 3); }
 
-function done() {
-  if (S.alarm) return;
-  S.alarm = true;
-  playAlarm(false);
-  draw();
-}
-
-function dismiss() {
-  if (!S.alarm) return;
-  S.alarm = false;
-  stopAlarm();
-  S.running = false;
-  S.left = S.total;
-  draw();
-}
-
-/* ---------- pointer on the card ---------- */
-
-function toDesign(e) {
-  const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / (r.width / W), y: (e.clientY - r.top) / (r.height / H) };
-}
-const inBox = (p, b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
-
-cv.addEventListener("pointerdown", e => {
-  cv.focus();
-  if (S.alarm) { dismiss(); return; }
-  if (inBox(toDesign(e), PLAY_BOX)) toggle();
-});
-cv.addEventListener("pointermove", e => {
-  const h = inBox(toDesign(e), PLAY_BOX) ? "play" : null;
-  if (h !== S.hover) { S.hover = h; cv.style.cursor = h ? "pointer" : "default"; draw(); }
-});
-cv.addEventListener("pointerleave", () => { if (S.hover) { S.hover = null; cv.style.cursor = "default"; draw(); } });
-
-window.addEventListener("keydown", e => {
-  const t = (document.activeElement || {});
-  if (t.isContentEditable || /INPUT/.test(t.tagName || "")) {
-    if (e.code === "Escape" || e.code === "Enter") { e.preventDefault(); t.blur(); }
-    return;
+  /* Every dot's radius is a product of the ambient wave, the entrance
+     sweep, the cursor's pull and the alarm ripple - one function, so the
+     whole halftone field moves as a single fluid surface. */
+  dotFactor(x, y, t) {
+    if (this.flat) return 1;
+    const M = this.M;
+    let f = 1 + M.amb * Math.sin(t * 1.35 + x * 0.0115 + y * 0.021);
+    if (this.entr < 1) {
+      const p = this.clamp((this.entr - (x / this.K.W) * 0.42) / 0.58);
+      f *= 0.06 + 0.94 * this.ease(p);
+    }
+    if (this.mag > 0.01 && this.ptrPos) {
+      const dx = x - this.ptrPos.x, dy = y - this.ptrPos.y;
+      f *= 1 + M.mag * this.mag * Math.exp(-(dx * dx + dy * dy) / 16200);
+    }
+    if (this.S.alarm) {
+      const d = Math.hypot(x - 612, y - 167);
+      f *= 1 + M.ripple * Math.sin(t * 6.2 - d * 0.022);
+    }
+    return f;
   }
-  if (e.code === "Escape") {
-    if (S.alarm) dismiss();
-    else if (S.editing) setEditing(false);
-    else setPanel(false);
-    return;
+
+  /* ---------- canvas plumbing ---------- */
+
+  paths() {
+    const A = window.POMO_ART;
+    if (A && !this.pL) { this.pL = new Path2D(A.CHK_LEFT_D); this.pR = new Path2D(A.CHK_RIGHT_D); }
   }
-  if (/^(Shift|Control|Alt|Meta|Caps|Tab)/.test(e.key)) return;
-  if (S.alarm) { e.preventDefault(); dismiss(); return; }
-  if (document.body.classList.contains("panel-open") && /BUTTON/.test(t.tagName || "")) return;
-  if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); toggle(); }
-  else if (e.code === "KeyR") { S.running = false; S.left = S.total; draw(); }
-  else if (e.code === "KeyI") { setInvert(!S.invert); }
-  else if (e.code === "ArrowLeft"  || e.code === "ArrowDown") { e.preventDefault(); setMinutes(S.minutes - (e.shiftKey ? 5 : 1), null, false); }
-  else if (e.code === "ArrowRight" || e.code === "ArrowUp")   { e.preventDefault(); setMinutes(S.minutes + (e.shiftKey ? 5 : 1), null, false); }
-});
 
-/* ==================================================================
-   CONTROL ROW
-   ================================================================== */
-
-const PALETTE = ["#90A3FF", "#E2B166", "#9AD8A6", "#F0A0B4", "#A6D9E8",
-                 "#D3B4F2", "#EBD97C", "#F2A97E", "#8FD5C6", "#F5B8D0"];
-const EMOJI = ["📑","🧘","📚","💻","🧪","✍️","🎧","🏃","☕","🍅","🧠","🔬",
-               "📝","🎯","🌙","☀️","🎹","🗂","🧹","🛠","💤","🍽","📞","🧾",
-               "📐","📊","🗒","🔖","🧮","⌨️","🖊","📖","🎨","🎬","🏋️","🚿",
-               "🥗","🧺","🐢","🌱","🔥","⚡️","🌊","🏔","🧊","🕯","🪐","🛰",
-               "🎲","♟","🧩","🎸","🥁","🪄","🧿","🩺","💊","🧴","🪥","🧼"];
-
-/* Text sits on the chip's own hue: pushed dark when the background is
-   light, pushed light when it's dark. */
-function hsl(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  let r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
-  let h = 0, s = 0;
-  if (mx !== mn) {
-    const d = mx - mn;
-    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
-    h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    h *= 60;
+  setupCtx(c) {
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+    c.scale(this.scale * this.dpr, this.scale * this.dpr);
   }
-  return [h, s, l];
-}
-function inkFor(hex) {
-  const [h, s, l] = hsl(hex);
-  if (s < 0.12) return l > 0.5 ? "#191919" : "#EBEBEB";
-  return l > 0.5 ? `hsl(${h.toFixed(0)} ${Math.max(s, 0.6) * 100}% 20%)`
-                 : `hsl(${h.toFixed(0)} ${Math.max(s, 0.5) * 100}% 90%)`;
-}
 
-const chipsEl = document.getElementById("chips");
-const stripEl = document.getElementById("strip");
-const addBtn  = Object.assign(document.createElement("button"), { id: "add", type: "button", textContent: "+" });
-const doneBtn = Object.assign(document.createElement("button"), { id: "done", type: "button", textContent: "Done" });
-const rowEl   = document.getElementById("row");
+  rr(c, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    c.beginPath(); c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
 
-const FIXED = [
-  { id: "short", name: "Short Break", minutes: 5,  colour: "#FFFFFF" },
-  { id: "long",  name: "Long Break",  minutes: 15, colour: "#FFFFFF" }
-];
+  clipCard(c) { const K = this.K.CARD; this.rr(c, K.x, K.y, K.w, K.h, K.r); c.clip(); }
 
-function buildRow() {
-  chipsEl.textContent = "";
-  const all = FIXED.concat(S.chips);
-  all.forEach((c, i) => chipsEl.appendChild(makeChip(c, i, i >= FIXED.length)));
-  chipsEl.appendChild(addBtn);
-  chipsEl.appendChild(doneBtn);
-  syncRow();
-  measureStrip();
-}
+  buildChecker() {
+    if (!this.pL || !this.chk) return;
+    const c = this.chkctx;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, this.chk.width, this.chk.height);
+    c.scale(this.scale * this.dpr, this.scale * this.dpr);
+    c.save(); this.clipCard(c); c.fillStyle = '#fff'; c.fill(this.pL); c.fill(this.pR); c.restore();
+  }
 
-function makeChip(c, index, custom) {
-  const el = document.createElement("div");
-  el.className = "chip" + (index % 2 === 0 ? " flip" : "") + (custom ? " custom" : "");
-  el.dataset.id = c.id;
-  el.style.background = c.colour;
-  el.style.color = inkFor(c.colour);
+  dotGlyph(c, g, col, t, mul) {
+    const D = this.K.DOT;
+    for (let r = 0; r < g.length; r++) {
+      const row = g[r];
+      for (let k = 0; k < row.length; k++) {
+        if (row[k] !== '#') continue;
+        const x = D.x0 + (col + k) * D.pitch, y = D.y0 + r * D.pitch;
+        const rad = D.r * this.dotFactor(x, y, t) * (mul ? mul(r) : 1);
+        if (rad <= 0.06) continue;
+        c.beginPath(); c.arc(x, y, rad, 0, 6.2832); c.fill();
+      }
+    }
+  }
 
-  if (custom) {
-    const del = document.createElement("button");
-    del.type = "button"; del.className = "del"; del.title = "Remove";
-    del.addEventListener("click", ev => {
-      ev.stopPropagation();
-      S.chips = S.chips.filter(x => x.id !== c.id);
-      saveSettings(); buildRow();
+  /* Digits don't cut - the outgoing dots shrink away while the incoming
+     ones pop in row by row, and the columns slide to their new x. */
+  drawClock(c, t) {
+    const A = window.POMO_ART, txt = this.clockText(), now = performance.now();
+    if (!this.slots || this.slots.length !== txt.length) {
+      this.slots = [...txt].map(ch => ({ ch, from: null, t0: 0, col: undefined }));
+    } else {
+      [...txt].forEach((ch, i) => {
+        const s = this.slots[i];
+        if (s.ch !== ch) { s.from = s.ch; s.ch = ch; s.t0 = now; }
+      });
+    }
+    let col = 0;
+    for (const s of this.slots) {
+      const g = A.GLYPHS[s.ch];
+      s.target = col;
+      col += (g ? g[0].length : 3) + 1;
+      s.col = s.col === undefined ? s.target : s.col + (s.target - s.col) * (this.reduced ? 1 : 0.22);
+      const p = s.from ? this.clamp((now - s.t0) / 300) : 1;
+      if (s.from && p < 1) {
+        const out = A.GLYPHS[s.from];
+        if (out) this.dotGlyph(c, out, s.col, t, () => Math.max(0, 1 - p * 1.35));
+        const g2 = A.GLYPHS[s.ch];
+        if (g2) this.dotGlyph(c, g2, s.col, t, r => {
+          const rp = this.clamp((p - r * 0.045) / 0.7);
+          return rp * (1 + 0.22 * Math.sin(rp * Math.PI));
+        });
+      } else {
+        if (s.from) s.from = null;
+        if (g) this.dotGlyph(c, g, s.col, t, null);
+      }
+    }
+  }
+
+  drawPlay(c, t) {
+    const A = window.POMO_ART, now = performance.now();
+    const key = this.S.alarm ? 'stop' : this.S.running ? 'pause' : 'play';
+    if (!this.play) this.play = { ch: key, from: null, t0: 0 };
+    if (this.play.ch !== key) { this.play.from = this.play.ch; this.play.ch = key; this.play.t0 = now; }
+    const tapped = now - this.S.press < 200;
+    let grow = tapped ? 0.8 : (this.hover ? 1.16 : 1);
+    if (this.S.running && !this.reduced) grow *= 1 + 0.055 * Math.sin(t * 3.1);
+    if (this.S.alarm) grow *= 1 + 0.12 * Math.sin(now / 150);
+    const p = this.play.from ? this.clamp((now - this.play.t0) / 260) : 1;
+    if (this.play.from && p < 1) {
+      this.dotGlyph(c, A.GLYPHS[this.play.from], this.K.PLAY.col, t, () => grow * Math.max(0, 1 - p * 1.4));
+      this.dotGlyph(c, A.GLYPHS[this.play.ch], this.K.PLAY.col, t, r => grow * this.clamp((p - r * 0.03) / 0.75) * (1 + 0.3 * Math.sin(this.clamp(p) * Math.PI)));
+    } else {
+      this.play.from = null;
+      this.dotGlyph(c, A.GLYPHS[this.play.ch], this.K.PLAY.col, t, () => grow);
+    }
+  }
+
+  /* The bar's leading edge feathers out, so progress reads as a wash
+     moving across the card rather than a hard block. */
+  drawBar(c, w) {
+    if (w <= 0) return;
+    const B = this.K.BAR, soft = Math.min(70, w);
+    c.fillStyle = '#fff';
+    if (w > soft) c.fillRect(B.x, B.y, w - soft, B.h);
+    const g = c.createLinearGradient(B.x + w - soft, 0, B.x + w, 0);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(B.x + Math.max(0, w - soft), B.y, soft, B.h);
+    c.fillStyle = '#fff';
+  }
+
+  buildMask(t) {
+    const m = this.mctx;
+    m.setTransform(1, 0, 0, 1, 0, 0);
+    m.clearRect(0, 0, this.mask.width, this.mask.height);
+    m.globalAlpha = this.clamp((this.entr - 0.08) / 0.5);
+    m.drawImage(this.chk, 0, 0);
+    m.globalAlpha = 1;
+    m.setTransform(this.scale * this.dpr, 0, 0, this.scale * this.dpr, 0, 0);
+    m.save(); this.clipCard(m); m.fillStyle = '#fff';
+    this.drawClock(m, t); this.drawPlay(m, t);
+    this.drawBar(m, Math.max(0, Math.min(this.K.BAR.full, this.barShown * this.K.BAR.full)));
+    m.restore();
+  }
+
+  /* A static reference mask, only for the luminance probe. */
+  drawMaskInto(c, unit) {
+    const A = window.POMO_ART; if (!A || !this.pL) return;
+    c.save(); c.scale(unit, unit); this.clipCard(c);
+    c.fillStyle = '#fff'; c.fill(this.pL); c.fill(this.pR);
+    this.flat = true;
+    let col = 0;
+    for (const ch of '100:00') {
+      const g = A.GLYPHS[ch]; if (!g) { col += 4; continue; }
+      this.dotGlyph(c, g, col, 0, null); col += g[0].length + 1;
+    }
+    this.dotGlyph(c, A.GLYPHS.play, this.K.PLAY.col, 0, null);
+    this.flat = false;
+    c.fillRect(this.K.BAR.x, this.K.BAR.y, this.K.BAR.full, this.K.BAR.h);
+    c.restore();
+  }
+
+  fallbackImage() {
+    if (this.fb) return this.fb;
+    const n = document.createElement('canvas'); n.width = 1000; n.height = 300;
+    const g = n.getContext('2d');
+    const grad = g.createLinearGradient(0, 300, 1000, 0);
+    [[0,'#131A5E'],[0.28,'#5B2E93'],[0.54,'#C43C6B'],[0.78,'#F0842F'],[1,'#FFD873']].forEach(([s, c]) => grad.addColorStop(s, c));
+    g.fillStyle = grad; g.fillRect(0, 0, 1000, 300);
+    g.globalCompositeOperation = 'overlay';
+    for (let i = 0; i < 14; i++) {
+      g.globalAlpha = 0.1 + Math.random() * 0.14;
+      g.fillStyle = i % 2 ? '#fff' : '#2A0F4A';
+      g.beginPath(); g.arc(Math.random() * 1000, Math.random() * 300, 120 + Math.random() * 220, 0, 6.2832); g.fill();
+    }
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+    this.fb = n; return n;
+  }
+
+  paintImage(c, src, unit, dim) {
+    const K = this.K.CARD;
+    c.save(); c.scale(unit, unit); this.clipCard(c);
+    const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+    const s = Math.max(K.w / sw, K.h / sh), dw = sw * s, dh = sh * s;
+    c.drawImage(src, K.x + (K.w - dw) / 2, K.y + (K.h - dh) / 2, dw, dh);
+    if (dim > 0) { c.fillStyle = 'rgba(0,0,0,' + dim.toFixed(3) + ')'; c.fillRect(K.x, K.y, K.w, K.h); }
+    c.restore();
+  }
+
+  paintTexture() {
+    this.setupCtx(this.tctx);
+    this.paintImage(this.tctx, this.S.img || this.fallbackImage(), 1, this.S.dim);
+    this.tctx.globalCompositeOperation = this.state.invert ? 'destination-out' : 'destination-in';
+    this.tctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.tctx.drawImage(this.mask, 0, 0);
+    this.tctx.globalCompositeOperation = 'source-over';
+  }
+
+  /* Auto-dim: sample the image only where it meets the card grey, then lay
+     down just enough black to hold 2.7:1. Once per image, not per frame. */
+  computeDim() {
+    if (!this.state.autoDim || !this.pL) { this.S.dim = 0; return; }
+    const src = this.S.img || this.fallbackImage(), unit = 0.22;
+    const n = document.createElement('canvas');
+    n.width = Math.round(this.K.W * unit); n.height = Math.round(this.K.H * unit);
+    const g = n.getContext('2d', { willReadFrequently: true });
+    this.paintImage(g, src, unit, 0);
+    g.globalCompositeOperation = this.state.invert ? 'destination-out' : 'destination-in';
+    this.drawMaskInto(g, unit);
+    g.globalCompositeOperation = 'source-over';
+    let d; try { d = g.getImageData(0, 0, n.width, n.height).data; } catch (e) { this.S.dim = 0; return; }
+    const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    let sum = 0, count = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 128) continue;
+      sum += 0.2126 * f(d[i]) + 0.7152 * f(d[i + 1]) + 0.0722 * f(d[i + 2]); count++;
+    }
+    if (!count) { this.S.dim = 0; return; }
+    const L = sum / count, target = (0.831 + 0.05) / 2.7 - 0.05;
+    this.S.dim = L <= target ? 0 : Math.min(0.68, Math.max(0, 1 - Math.pow(target / L, 1 / 2.4)));
+  }
+
+  fit(tpl, text, targetW) {
+    const key = tpl + '|' + text + '|' + targetW.toFixed(1);
+    if (this.fitCache.has(key)) return this.fitCache.get(key);
+    let lo = 4, hi = 240;
+    for (let i = 0; i < 22; i++) {
+      const mid = (lo + hi) / 2;
+      this.ctx.font = tpl.replace('SIZE', mid.toFixed(2));
+      if (this.ctx.measureText(text).width > targetW) hi = mid; else lo = mid;
+    }
+    this.fitCache.set(key, lo); return lo;
+  }
+
+  clockText() {
+    const secs = Math.max(0, Math.ceil(this.S.left / 1000));
+    return String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(secs % 60).padStart(2, '0');
+  }
+
+  draw(now) {
+    const c = this.ctx; if (!c) return;
+    const t = now / 1000;
+    this.M = this.motion();
+    this.entr = this.reduced ? 1 : this.clamp((now - this.t0) / 900);
+    const target = this.S.total > 0 ? 1 - this.S.left / this.S.total : 0;
+    this.barShown += (target - this.barShown) * (this.reduced ? 1 : 0.14);
+    if (Math.abs(target - this.barShown) < 0.0004) this.barShown = target;
+    this.mag += ((this.ptrPos ? 1 : 0) - this.mag) * 0.12;
+
+    const ready = !!(window.POMO_ART && this.pL);
+    if (ready) { this.buildMask(t); this.paintTexture(); }
+
+    this.setupCtx(c);
+    c.fillStyle = this.K.page; c.fillRect(0, 0, this.K.W, this.K.H);
+    const K = this.K.CARD; this.rr(c, K.x, K.y, K.w, K.h, K.r); c.fillStyle = this.K.card; c.fill();
+    if (ready) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(this.tex, 0, 0); c.restore(); }
+
+    const ps = this.fit(this.K.SERIF, 'pomodoro', this.K.POMO.w);
+    c.font = this.K.SERIF.replace('SIZE', ps.toFixed(2));
+    const mm = c.measureText('pomodoro');
+    const asc = mm.actualBoundingBoxAscent || ps * 0.72;
+    const lead = mm.actualBoundingBoxLeft !== undefined ? -mm.actualBoundingBoxLeft : 0;
+    const a = this.clamp(this.entr * 1.7);
+    c.globalAlpha = a;
+    c.fillStyle = this.state.invert ? this.K.card : (this.props.accent || '#24094A');
+    c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+    c.fillText('pomodoro', this.K.POMO.x - lead, this.K.POMO.top + asc + (1 - a) * 8);
+    c.globalAlpha = 1;
+  }
+
+  tick = (now) => {
+    this.raf = requestAnimationFrame(this.tick);
+    if (!this.ctx || document.hidden) return;
+    this.elapse();
+    const anim = (this.slots || []).some(s => s.from) || (this.play && this.play.from) ||
+      Math.abs((this.S.total > 0 ? 1 - this.S.left / this.S.total : 0) - this.barShown) > 0.0004;
+    const busy = this.S.running || this.S.alarm || this.mag > 0.01 || this.entr < 1 || anim || now - this.S.press < 260;
+    if (!busy) { this.half = !this.half; if (this.half) return; }
+    this.draw(now);
+  };
+
+  /* ---------- timer ---------- */
+
+  setMinutes(m, activeId, start) {
+    const mins = Math.max(1, Math.min(100, Math.round(m)));
+    this.curMin = mins;
+    this.S.total = mins * 60000; this.S.left = this.S.total;
+    if (start) { this.S.endAt = Date.now() + this.S.left; this.S.running = true; } else this.S.running = false;
+    this.barShown = 0;
+    this.setState(s => ({ minutes: mins, active: activeId || null, valFlip: !s.valFlip }));
+  }
+
+  toggle() {
+    if (this.S.alarm) { this.dismiss(); return; }
+    if (this.S.running) { this.S.left = Math.max(0, this.S.endAt - Date.now()); this.S.running = false; }
+    else { this.S.endAt = Date.now() + this.S.left; this.S.running = true; }
+    this.S.press = performance.now();
+  }
+
+  /* Wall-clock, not frame deltas - a background tab throttles rAF. */
+  elapse = () => {
+    if (!this.S.running) return;
+    this.S.left = this.S.endAt - Date.now();
+    if (this.S.left <= 0) { this.S.left = 0; this.S.running = false; this.fire(); }
+  };
+
+  fire() {
+    if (this.S.alarm) return;
+    this.S.alarm = true; this.playAlarm(false); this.forceUpdate();
+  }
+
+  dismiss() {
+    if (!this.S.alarm) return;
+    this.S.alarm = false; this.stopAlarm();
+    this.S.running = false; this.S.left = this.S.total; this.barShown = 0; this.forceUpdate();
+  }
+
+  /* ---------- alarm ---------- */
+
+  chime() {
+    try {
+      this.ac = this.ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (this.ac.state === 'suspended') this.ac.resume();
+      [0, 0.22, 0.44].forEach((d, i) => {
+        const o = this.ac.createOscillator(), g = this.ac.createGain();
+        o.type = 'sine'; o.frequency.value = 660 + i * 110;
+        const peak = Math.max(0.0002, 0.2 * this.state.volume), T = this.ac.currentTime;
+        g.gain.setValueAtTime(0.0001, T + d);
+        g.gain.exponentialRampToValueAtTime(peak, T + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, T + d + 0.18);
+        o.connect(g); g.connect(this.ac.destination);
+        o.start(T + d); o.stop(T + d + 0.2);
+      });
+    } catch (e) {}
+  }
+
+  playAlarm(preview) {
+    const loop = preview ? false : this.state.loop;
+    if (this.ringURL) {
+      this.ring.loop = loop; this.ring.volume = this.state.volume;
+      try { this.ring.currentTime = 0; } catch (e) {}
+      this.ring.play().catch(() => {});
+      if (!loop && !preview) this.ring.onended = () => this.dismiss();
+    } else {
+      this.chime();
+      if (loop) this.chimeT = setInterval(() => this.chime(), 2100);
+    }
+  }
+
+  stopAlarm() {
+    if (this.ring) { this.ring.pause(); this.ring.onended = null; try { this.ring.currentTime = 0; } catch (e) {} }
+    if (this.chimeT) { clearInterval(this.chimeT); this.chimeT = null; }
+  }
+
+  /* ---------- pointer / keys ---------- */
+
+  toDesign(e) {
+    const r = this.cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / (r.width / this.K.W), y: (e.clientY - r.top) / (r.height / this.K.H) };
+  }
+  inBox(p, b) { return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h; }
+
+  onCardDown = e => {
+    this.cv.focus();
+    if (this.state.panel === 'open') return;
+    if (this.S.alarm) { this.dismiss(); return; }
+    if (this.inBox(this.toDesign(e), this.PBOX)) this.toggle();
+  };
+  onCardMove = e => {
+    const p = this.toDesign(e);
+    this.ptrPos = p;
+    const h = this.inBox(p, this.PBOX);
+    if (h !== this.hover) { this.hover = h; this.cv.style.cursor = h ? 'pointer' : 'default'; }
+  };
+  onCardOut = () => { this.ptrPos = null; this.hover = false; this.cv.style.cursor = 'default'; };
+  cardEnter = () => this.setState({ tools: true });
+  cardLeave = () => this.setState({ tools: false });
+
+  onKey = e => {
+    const t = document.activeElement || {};
+    if (t.isContentEditable || /INPUT/.test(t.tagName || '')) {
+      if (e.code === 'Escape' || e.code === 'Enter') { e.preventDefault(); t.blur(); }
+      return;
+    }
+    if (e.code === 'Escape') {
+      if (this.S.alarm) this.dismiss();
+      else if (this.state.editing) this.commitEdit();
+      else this.setState({ panel: this.state.panel === 'open' ? 'closing' : 'closed', emoji: null }, this.settle);
+      return;
+    }
+    if (/^(Shift|Control|Alt|Meta|Caps|Tab)/.test(e.key)) return;
+    if (this.S.alarm) { e.preventDefault(); this.dismiss(); return; }
+    if (this.state.panel === 'open' && /BUTTON/.test(t.tagName || '')) return;
+    if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); this.toggle(); }
+    else if (e.code === 'KeyR') { this.S.running = false; this.S.left = this.S.total; this.barShown = 0; }
+    else if (e.code === 'KeyI') this.tglInv();
+    else if (e.code === 'KeyC') this.setState({ panel: 'open', tools: true });
+    else if (e.code === 'ArrowLeft' || e.code === 'ArrowDown') { e.preventDefault(); this.setMinutes(this.curMin - (e.shiftKey ? 5 : 1), null, false); }
+    else if (e.code === 'ArrowRight' || e.code === 'ArrowUp') { e.preventDefault(); this.setMinutes(this.curMin + (e.shiftKey ? 5 : 1), null, false); }
+  };
+
+  onOutside = () => {
+    if (this.state.emoji) this.setState({ emoji: null });
+    if (this.state.panel === 'open') this.setState({ panel: 'closing' }, this.settle);
+  };
+  settle = () => {
+    clearTimeout(this.settleT);
+    this.settleT = setTimeout(() => { if (this.state.panel === 'closing') this.setState({ panel: 'closed' }); }, 190);
+  };
+
+  /* ---------- drag / drop ---------- */
+
+  onDragEnter = e => { e.preventDefault(); this.dragDepth = (this.dragDepth || 0) + 1; this.setState({ dragging: true }); };
+  onDragLeave = () => { if (--this.dragDepth <= 0) { this.dragDepth = 0; this.setState({ dragging: false }); } };
+  onDrop = e => {
+    e.preventDefault(); this.dragDepth = 0; this.setState({ dragging: false });
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    if (/^image\//.test(f.type)) this.storeImage(f); else if (/^audio\//.test(f.type)) this.storeRing(f);
+  };
+  onPaste = e => {
+    const items = e.clipboardData && e.clipboardData.items; if (!items) return;
+    for (const it of items) if (it.type && it.type.startsWith('image/')) { this.storeImage(it.getAsFile()); break; }
+  };
+
+  /* ---------- storage ---------- */
+
+  KEY_IMG = 'pomodoro.image.v2';
+  KEY_SET = 'pomodoro.settings.v2';
+
+  save() {
+    try {
+      localStorage.setItem(this.KEY_SET, JSON.stringify({
+        invert: this.state.invert, autoDim: this.state.autoDim, loop: this.state.loop,
+        volume: this.state.volume, chips: this.state.chips
+      }));
+    } catch (e) {}
+  }
+
+  restore() {
+    let st = {};
+    try { st = JSON.parse(localStorage.getItem(this.KEY_SET) || '{}'); } catch (e) {}
+    const next = {};
+    if (typeof st.invert === 'boolean') next.invert = st.invert;
+    if (typeof st.autoDim === 'boolean') next.autoDim = st.autoDim;
+    if (typeof st.loop === 'boolean') next.loop = st.loop;
+    if (typeof st.volume === 'number') next.volume = st.volume;
+    if (Array.isArray(st.chips)) next.chips = st.chips.filter(c => c && c.id && c.minutes && String(c.name || '').trim());
+    if (Object.keys(next).length) this.setState(next, () => this.resize());
+    if (this.ring) this.ring.volume = next.volume ?? this.state.volume;
+    try {
+      const saved = localStorage.getItem(this.KEY_IMG);
+      if (saved) {
+        this.setState({ imgName: localStorage.getItem(this.KEY_IMG + '.name') || 'Saved image' });
+        this.applyDataURL(saved);
+      }
+    } catch (e) {}
+    Promise.all([this.idbGet('ring'), this.idbGet('ringName')])
+      .then(([blob, name]) => { if (blob) this.useRing(blob, name); }).catch(() => {});
+  }
+
+  idb() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('pomodoro', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('files');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
     });
-    el.appendChild(del);
-
-    const emo = document.createElement("span");
-    emo.className = "emo"; emo.textContent = c.emoji || "🍅";
-    emo.addEventListener("click", ev => {
-      if (!S.editing) return;
-      ev.stopPropagation(); openEmoji(emo, c);
+  }
+  async idbSet(k, v) {
+    const db = await this.idb();
+    return new Promise((res, rej) => {
+      const t = db.transaction('files', 'readwrite');
+      t.objectStore('files').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error);
     });
-    el.appendChild(emo);
+  }
+  async idbGet(k) {
+    const db = await this.idb();
+    return new Promise((res, rej) => {
+      const t = db.transaction('files', 'readonly');
+      const q = t.objectStore('files').get(k);
+      q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+    });
   }
 
-  const lbl = document.createElement("span");
-  lbl.className = "lbl"; lbl.textContent = c.name;
-  if (custom) {
-    lbl.addEventListener("input", () => { c.name = lbl.textContent.trim() || "Focus"; saveSettings(); });
-    lbl.addEventListener("blur",  () => { lbl.textContent = c.name; measureStrip(); });
-    lbl.addEventListener("click", ev => { if (S.editing) ev.stopPropagation(); });
-  }
-  el.appendChild(lbl);
-
-  if (custom) {
-    /* Edited in place: prompt() is blocked inside Notion's sandboxed iframe. */
-    const mins = document.createElement("span");
-    mins.className = "mins";
-    mins.textContent = c.minutes + "m";
-    mins.addEventListener("pointerdown", ev => { if (S.editing) ev.stopPropagation(); });
-    mins.addEventListener("click", ev => {
-      if (!S.editing) return;
-      ev.stopPropagation();
-      if (mins.isContentEditable) return;
-      mins.contentEditable = "true";
-      mins.textContent = String(c.minutes);
-      mins.focus();
-      const r = document.createRange(); r.selectNodeContents(mins);
-      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-    });
-    mins.addEventListener("keydown", ev => {
-      ev.stopPropagation();
-      if (ev.key === "Enter" || ev.key === "Escape") { ev.preventDefault(); mins.blur(); }
-      else if (!/^[0-9]$/.test(ev.key) && !["Backspace","Delete","ArrowLeft","ArrowRight","Tab"].includes(ev.key) && !ev.metaKey && !ev.ctrlKey) ev.preventDefault();
-    });
-    mins.addEventListener("blur", () => {
-      const n = Math.max(1, Math.min(100, parseInt(mins.textContent, 10) || c.minutes));
-      c.minutes = n;
-      mins.contentEditable = "false";
-      mins.textContent = n + "m";
-      saveSettings(); measureStrip();
-    });
-    el.appendChild(mins);
-
-    const sw = document.createElement("input");
-    sw.type = "color"; sw.className = "swatch"; sw.value = c.colour;
-    sw.title = "Any colour";
-    sw.addEventListener("click", ev => ev.stopPropagation());
-    sw.addEventListener("pointerdown", ev => ev.stopPropagation());
-    sw.addEventListener("input", () => {
-      c.colour = sw.value;
-      el.style.background = c.colour;
-      el.style.color = inkFor(c.colour);   // label follows the hue automatically
-      saveSettings();
-    });
-    el.appendChild(sw);
+  applyDataURL(url) {
+    const im = new Image();
+    im.onload = () => { this.S.img = im; this.computeDim(); };
+    im.src = url;
   }
 
-  el.addEventListener("click", () => {
-    if (S.editing) return;
-    setMinutes(c.minutes, c.id, true);
-  });
-  return el;
-}
+  storeImage(file) {
+    if (!file || !/^image\//.test(file.type)) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      const im = new Image();
+      im.onload = () => {
+        const s = Math.min(1, 1400 / Math.max(im.width, im.height));
+        const n = document.createElement('canvas');
+        n.width = Math.round(im.width * s); n.height = Math.round(im.height * s);
+        n.getContext('2d').drawImage(im, 0, 0, n.width, n.height);
+        let url = n.toDataURL('image/jpeg', 0.85);
+        if (url.length > 3.2e6) url = n.toDataURL('image/jpeg', 0.6);
+        try { localStorage.setItem(this.KEY_IMG, url); localStorage.setItem(this.KEY_IMG + '.name', file.name); } catch (e) {}
+        this.setState({ imgName: file.name });
+        this.applyDataURL(url);
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  }
 
-function setEditing(on) {
-  S.editing = on;
-  rowEl.classList.toggle("editing", on);
-  chipsEl.querySelectorAll(".chip.custom .lbl").forEach(l => {
-    l.contentEditable = on ? "true" : "false";
-  });
-  closeEmoji();
-  measureStrip();
-}
+  useRing(blob, name) {
+    if (this.ringURL) URL.revokeObjectURL(this.ringURL);
+    this.ringURL = blob ? URL.createObjectURL(blob) : null;
+    if (this.ringURL) this.ring.src = this.ringURL; else this.ring.removeAttribute('src');
+    this.setState({ ringName: blob ? (name || 'Custom sound') : 'Built-in chime' });
+  }
 
-addBtn.addEventListener("click", ev => {
-  ev.stopPropagation();
-  const used = S.chips.map(c => c.colour);
-  const colour = PALETTE.find(p => !used.includes(p)) || PALETTE[S.chips.length % PALETTE.length];
-  const c = { id: "c" + Date.now().toString(36), name: "Focus", emoji: EMOJI[S.chips.length % EMOJI.length], colour, minutes: 25 };
-  S.chips.push(c);
-  saveSettings();
-  buildRow();
-  setEditing(true);
-  const el = chipsEl.querySelector('.chip[data-id="' + c.id + '"] .lbl');
-  if (el) {
-    el.scrollIntoView({ inline: "center", block: "nearest" });
+  storeRing(file) {
+    if (!file || !/^audio\//.test(file.type)) return;
+    this.idbSet('ring', file).then(() => this.idbSet('ringName', file.name)).catch(() => {});
+    this.useRing(file, file.name);
+  }
+
+  /* ---------- chips ---------- */
+
+  inkFor(hex) {
+    const n = parseInt(String(hex).slice(1), 16);
+    let r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    let h = 0, s = 0;
+    if (mx !== mn) {
+      const d = mx - mn;
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60;
+    }
+    if (s < 0.12) return l > 0.5 ? '#191919' : '#EBEBEB';
+    return l > 0.5 ? `hsl(${h.toFixed(0)} ${Math.max(s, 0.6) * 100}% 20%)` : `hsl(${h.toFixed(0)} ${Math.max(s, 0.5) * 100}% 90%)`;
+  }
+
+  focusChip(id) {
+    const el = this.chipsRef.current && this.chipsRef.current.querySelector('[data-chip="' + id + '"] [contenteditable]');
+    if (!el) return;
     el.focus();
     const r = document.createRange(); r.selectNodeContents(el);
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    const box = this.chipsRef.current;
+    if (box) box.scrollLeft = box.scrollWidth;
   }
-});
-doneBtn.addEventListener("click", ev => { ev.stopPropagation(); setEditing(false); });
 
-function syncRow() {
-  chipsEl.querySelectorAll(".chip").forEach(el => {
-    el.classList.toggle("active", el.dataset.id === S.active);
-  });
-  document.getElementById("cval").textContent = S.minutes;
-  document.getElementById("fill").style.width = ((S.minutes - 1) / 99 * 100).toFixed(2) + "%";
-}
-
-function measureStrip() {
-  requestAnimationFrame(() => {
-    const over = chipsEl.scrollWidth - chipsEl.clientWidth;
-    stripEl.classList.toggle("fadeL", chipsEl.scrollLeft > 2);
-    stripEl.classList.toggle("fadeR", over > 2 && chipsEl.scrollLeft < over - 2);
-  });
-}
-chipsEl.addEventListener("scroll", measureStrip);
-
-/* emoji picker */
-const emojiEl   = document.getElementById("emoji");
-const emojiIn   = document.getElementById("emojiIn");
-const emojiGrid = document.getElementById("emojiGrid");
-
-function applyEmoji(e) {
-  if (!e || !emojiEl.target) return;
-  emojiEl.target.chip.emoji = e;
-  emojiEl.target.el.textContent = e;
-  saveSettings(); measureStrip();
-  closeEmoji();
-}
-
-EMOJI.forEach(e => {
-  const b = document.createElement("button");
-  b.type = "button"; b.textContent = e;
-  b.addEventListener("click", ev => { ev.stopPropagation(); applyEmoji(e); });
-  emojiGrid.appendChild(b);
-});
-
-/* The grid is a shortcut, not the whole set -- anything typed or pasted
-   into the field wins, so the OS picker covers everything else. */
-emojiIn.addEventListener("input", () => {
-  const v = [...emojiIn.value.trim()];
-  if (!v.length) return;
-  const glyph = /\p{Extended_Pictographic}/u.test(v[0]) && v.length > 1 ? emojiIn.value.trim() : v[0];
-  applyEmoji(glyph);
-});
-emojiIn.addEventListener("keydown", ev => {
-  ev.stopPropagation();
-  if (ev.key === "Enter") { ev.preventDefault(); applyEmoji(emojiIn.value.trim()); }
-  if (ev.key === "Escape") closeEmoji();
-});
-
-function openEmoji(el, chip) {
-  const r = el.getBoundingClientRect();
-  emojiEl.target = { el, chip };
-  emojiEl.classList.add("open");
-  emojiIn.value = "";
-  const w = emojiEl.offsetWidth, h = emojiEl.offsetHeight;
-  emojiEl.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
-  emojiEl.style.top  = (r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8) + "px";
-  setTimeout(() => emojiIn.focus(), 0);
-}
-function closeEmoji() { emojiEl.classList.remove("open"); emojiEl.target = null; }
-emojiEl.addEventListener("pointerdown", e => e.stopPropagation());
-
-/* custom-time track */
-const trackEl = document.getElementById("track");
-let dragging = false;
-function trackTo(clientX) {
-  const r = trackEl.getBoundingClientRect();
-  const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
-  setMinutes(1 + t * 99, null, false);
-}
-trackEl.addEventListener("pointerdown", e => {
-  dragging = true; trackEl.setPointerCapture(e.pointerId); trackTo(e.clientX);
-});
-trackEl.addEventListener("pointermove", e => { if (dragging) trackTo(e.clientX); });
-trackEl.addEventListener("pointerup",   () => { dragging = false; });
-trackEl.addEventListener("pointercancel", () => { dragging = false; });
-
-/* ---------- panel ---------- */
-
-const panel    = document.getElementById("panel");
-const btnPanel = document.getElementById("btnPanel");
-
-function setPanel(open) {
-  document.body.classList.toggle("panel-open", open);
-  btnPanel.setAttribute("aria-expanded", open ? "true" : "false");
-}
-btnPanel.addEventListener("pointerdown", e => e.stopPropagation());
-btnPanel.addEventListener("click", e => {
-  e.stopPropagation();
-  setPanel(!document.body.classList.contains("panel-open"));
-});
-panel.addEventListener("pointerdown", e => e.stopPropagation());
-rowEl.addEventListener("pointerdown", e => e.stopPropagation());
-document.getElementById("btnClose").addEventListener("click", () => setPanel(false));
-window.addEventListener("pointerdown", () => { setPanel(false); closeEmoji(); });
-
-function bindSwitch(el, get, set) {
-  el.classList.toggle("on", get());
-  el.addEventListener("click", () => { set(!get()); el.classList.toggle("on", get()); });
-}
-
-/* ---------- storage ---------- */
-
-const KEY_IMG = "pomodoro.image.v2";
-const KEY_SET = "pomodoro.settings.v2";
-
-function saveSettings() {
-  try {
-    localStorage.setItem(KEY_SET, JSON.stringify({
-      invert: S.invert, autoDim: S.autoDim, loop: S.loop, volume: S.volume, chips: S.chips
-    }));
-  } catch (e) {}
-}
-
-/* The image is small enough for localStorage. A sound file usually isn't,
-   so that goes in IndexedDB as a Blob. */
-function idb() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open("pomodoro", 1);
-    r.onupgradeneeded = () => r.result.createObjectStore("files");
-    r.onsuccess = () => res(r.result);
-    r.onerror   = () => rej(r.error);
-  });
-}
-async function idbSet(k, v) {
-  const db = await idb();
-  return new Promise((res, rej) => {
-    const t = db.transaction("files", "readwrite");
-    t.objectStore("files").put(v, k);
-    t.oncomplete = res; t.onerror = () => rej(t.error);
-  });
-}
-async function idbGet(k) {
-  const db = await idb();
-  return new Promise((res, rej) => {
-    const t = db.transaction("files", "readonly");
-    const q = t.objectStore("files").get(k);
-    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
-  });
-}
-
-/* ---------- image ---------- */
-
-const imgLabel = document.getElementById("imgName");
-
-function applyDataURL(url) {
-  const im = new Image();
-  im.onload = () => { S.img = im; computeDim(); draw(); };
-  im.src = url;
-}
-
-function storeImage(file) {
-  if (!file || !/^image\//.test(file.type)) return;
-  const fr = new FileReader();
-  fr.onload = () => {
-    const im = new Image();
-    im.onload = () => {
-      const s = Math.min(1, 1400 / Math.max(im.width, im.height));
-      const n = document.createElement("canvas");
-      n.width = Math.round(im.width * s); n.height = Math.round(im.height * s);
-      n.getContext("2d").drawImage(im, 0, 0, n.width, n.height);
-      let url = n.toDataURL("image/jpeg", 0.85);
-      if (url.length > 3.2e6) url = n.toDataURL("image/jpeg", 0.6);
-      try {
-        localStorage.setItem(KEY_IMG, url);
-        localStorage.setItem(KEY_IMG + ".name", file.name);
-      } catch (err) {}
-      imgLabel.textContent = file.name;
-      applyDataURL(url);
-    };
-    im.src = fr.result;
+  /* The + drops a blank, dashed-outline shortcut waiting for a name - it is
+     only real once it has one. A second + while one is still blank focuses
+     that one instead of littering the row. */
+  addChip = e => {
+    e.stopPropagation();
+    const blank = this.state.chips.find(c => !String(c.name || '').trim());
+    if (blank) { this.setState({ editing: true }, () => { this.resize(); this.focusChip(blank.id); }); return; }
+    const used = this.state.chips.map(c => c.colour);
+    const colour = this.PAL.find(p => !used.includes(p)) || this.PAL[this.state.chips.length % this.PAL.length];
+    const c = { id: 'c' + Date.now().toString(36), name: '', emoji: this.EMO[this.state.chips.length % this.EMO.length], colour, minutes: 25 };
+    this.setState(s => ({ chips: s.chips.concat([c]), editing: true }), () => {
+      this.save(); this.resize(); this.measureStrip(); this.focusChip(c.id);
+    });
   };
-  fr.readAsDataURL(file);
-}
 
-document.getElementById("pImg").addEventListener("click", () => document.getElementById("file").click());
-document.getElementById("file").addEventListener("change", e => storeImage(e.target.files[0]));
-document.getElementById("pImgClear").addEventListener("click", () => {
-  try { localStorage.removeItem(KEY_IMG); localStorage.removeItem(KEY_IMG + ".name"); } catch (e) {}
-  imgLabel.textContent = "Default gradient";
-  S.img = null; computeDim(); draw();
-});
+  /* Leaving edit mode is the commit point: unnamed shortcuts never made it. */
+  commitEdit = () => {
+    this.setState(s => ({
+      chips: s.chips.filter(c => String(c.name || '').trim()),
+      editing: false, minsEdit: null, emoji: null
+    }), () => { this.save(); this.resize(); this.measureStrip(); });
+  };
 
-/* ---------- ringtone ---------- */
-
-const ringLabel = document.getElementById("ringName");
-
-function useRing(blob, name) {
-  if (ringURL) URL.revokeObjectURL(ringURL);
-  ringURL = blob ? URL.createObjectURL(blob) : null;
-  if (ringURL) ring.src = ringURL; else ring.removeAttribute("src");
-  ringLabel.textContent = blob ? (name || "Custom sound") : "Built-in chime";
-}
-
-function storeRing(file) {
-  if (!file || !/^audio\//.test(file.type)) return;
-  idbSet("ring", file).then(() => idbSet("ringName", file.name)).catch(() => {});
-  useRing(file, file.name);
-}
-
-document.getElementById("pRing").addEventListener("click", () => document.getElementById("fileA").click());
-document.getElementById("fileA").addEventListener("change", e => storeRing(e.target.files[0]));
-document.getElementById("pRingClear").addEventListener("click", () => {
-  idbSet("ring", null).catch(() => {});
-  idbSet("ringName", null).catch(() => {});
-  stopAlarm(); useRing(null);
-});
-
-const btnTest = document.getElementById("pTest");
-btnTest.addEventListener("click", () => {
-  if (btnTest.textContent === "Stop") { stopAlarm(); btnTest.textContent = "Play"; return; }
-  playAlarm(true);
-  btnTest.textContent = "Stop";
-  setTimeout(() => { if (btnTest.textContent === "Stop") { stopAlarm(); btnTest.textContent = "Play"; } }, 4000);
-});
-
-/* ---------- settings wiring ---------- */
-
-bindSwitch(document.getElementById("swInv"),  () => S.invert,  v => { S.invert = v;  computeDim(); draw(); saveSettings(); });
-bindSwitch(document.getElementById("swDim"),  () => S.autoDim, v => { S.autoDim = v; computeDim(); draw(); saveSettings(); });
-bindSwitch(document.getElementById("swLoop"), () => S.loop,    v => { S.loop = v;    saveSettings(); });
-
-const vol = document.getElementById("vol");
-vol.addEventListener("input", () => {
-  S.volume = vol.value / 100; ring.volume = S.volume; saveSettings();
-});
-
-function setInvert(v) {
-  S.invert = !!v;
-  document.getElementById("swInv").classList.toggle("on", S.invert);
-  computeDim(); draw(); saveSettings();
-}
-
-/* ---------- restore ---------- */
-
-try {
-  const st = JSON.parse(localStorage.getItem(KEY_SET) || "{}");
-  if (typeof st.invert  === "boolean") S.invert  = st.invert;
-  if (typeof st.autoDim === "boolean") S.autoDim = st.autoDim;
-  if (typeof st.loop    === "boolean") S.loop    = st.loop;
-  if (typeof st.volume  === "number")  S.volume  = st.volume;
-  if (Array.isArray(st.chips)) S.chips = st.chips.filter(c => c && c.id && c.minutes);
-} catch (e) {}
-document.getElementById("swInv").classList.toggle("on", S.invert);
-document.getElementById("swDim").classList.toggle("on", S.autoDim);
-document.getElementById("swLoop").classList.toggle("on", S.loop);
-vol.value = Math.round(S.volume * 100);
-ring.volume = S.volume;
-
-try {
-  const saved = localStorage.getItem(KEY_IMG);
-  if (saved) {
-    imgLabel.textContent = localStorage.getItem(KEY_IMG + ".name") || "Saved image";
-    applyDataURL(saved);
+  openEmoji(el, id) {
+    const r = el.getBoundingClientRect();
+    const w = 292, h = 262;
+    this.setState({
+      emoji: {
+        id,
+        x: Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)),
+        y: r.top - h - 8 < 8 ? Math.min(r.bottom + 8, window.innerHeight - h - 8) : r.top - h - 8
+      }
+    });
   }
-} catch (e) {}
 
-Promise.all([idbGet("ring"), idbGet("ringName")])
-  .then(([blob, name]) => { if (blob) useRing(blob, name); })
-  .catch(() => {});
+  applyEmoji(ch) {
+    const id = this.state.emoji && this.state.emoji.id; if (!id || !ch) return;
+    this.setState(s => ({ chips: s.chips.map(c => c.id === id ? { ...c, emoji: ch } : c), emoji: null }), () => { this.save(); this.measureStrip(); });
+  }
 
-/* ---------- drag, drop, paste ---------- */
+  /* ---------- sliders ---------- */
 
-function takeFile(f) {
-  if (!f) return;
-  if (/^image\//.test(f.type)) storeImage(f);
-  else if (/^audio\//.test(f.type)) storeRing(f);
+  trackTo(clientX) {
+    const r = this.trackRef.current.getBoundingClientRect();
+    this.setMinutes(1 + Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 99, null, false);
+  }
+  trackDown = e => {
+    e.stopPropagation();
+    const w = this.wrapRef.current; if (w) w.style.setProperty('--fillt', '0s');
+    this.trackTo(e.clientX);
+    const move = ev => this.trackTo(ev.clientX);
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      if (w) w.style.setProperty('--fillt', '.34s');
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
+
+  volTo(clientX) {
+    const r = this.volRef.current.getBoundingClientRect();
+    const v = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    this.ring.volume = v;
+    this.setState({ volume: v }, () => this.save());
+  }
+  volDown = e => {
+    e.stopPropagation(); this.volTo(e.clientX);
+    const move = ev => this.volTo(ev.clientX);
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
+
+  step(delta) {
+    return e => {
+      e.preventDefault(); e.stopPropagation();
+      const fire = () => this.setMinutes(this.curMin + delta, null, false);
+      fire();
+      clearTimeout(this.holdT); clearInterval(this.holdI);
+      this.holdT = setTimeout(() => { this.holdI = setInterval(fire, 90); }, 400);
+      const stop = () => {
+        clearTimeout(this.holdT); clearInterval(this.holdI);
+        window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop);
+      };
+      window.addEventListener('pointerup', stop); window.addEventListener('pointercancel', stop);
+    };
+  }
+
+  /* Hashed upload names are unreadable at 11px - keep both ends. */
+  shortName(n) {
+    n = String(n || '');
+    return n.length <= 26 ? n : n.slice(0, 13) + '…' + n.slice(-10);
+  }
+
+  tglInv = () => this.setState(s => ({ invert: !s.invert }), () => { this.computeDim(); this.save(); });
+  tglDim = () => this.setState(s => ({ autoDim: !s.autoDim }), () => { this.computeDim(); this.save(); });
+  tglLoop = () => this.setState(s => ({ loop: !s.loop }), () => this.save());
+
+  /* ---------- render values ---------- */
+
+  renderVals() {
+    const st = this.state, accent = this.props.accent || '#24094A';
+    const ring = on => on ? 'inset 0 0 0 calc(3.5 * var(--s, 1px)) currentColor' : 'none';
+    const knob = on => on ? 'translateX(calc(var(--swH, 20px) - 4px))' : 'none';
+
+    const chips = st.chips.map((c, i) => {
+      const editing = st.editing, minsEdit = st.minsEdit === c.id;
+      const blank = !String(c.name || '').trim();
+      return {
+        id: c.id, name: c.name, emoji: c.emoji || '🍅', colour: c.colour,
+        ink: this.inkFor(c.colour),
+        radius: (i % 2 === 0)
+          ? 'var(--rcap, 25px) var(--rcap, 25px) 0 var(--rcap, 25px)'
+          : 'var(--rcap, 25px) var(--rcap, 25px) var(--rcap, 25px) 0',
+        ring: ring(st.active === c.id),
+        delay: (0.12 + i * 0.06).toFixed(2) + 's',
+        padLeft: editing ? 'calc(46 * var(--es, 1px))' : 'var(--cpad, 30px)',
+        delDisp: editing ? 'inline-flex' : 'none',
+        swDisp: editing ? 'inline-block' : 'none',
+        cursor: editing ? 'default' : 'pointer',
+        cursor2: editing ? 'text' : 'inherit',
+        editable: editing,
+        bstyle: blank ? 'dashed' : 'solid',
+        lineC: editing ? 'currentColor' : 'transparent',
+        ghost: editing && blank ? 'block' : 'none',
+        nameW: editing && blank ? 'calc(58 * var(--es, 1px))' : '0',
+        minsEditable: minsEdit,
+        minsText: minsEdit ? String(c.minutes) : c.minutes + 'm',
+        minsO: minsEdit ? 1 : editing ? 0.8 : 0.55,
+        minsBg: minsEdit ? 'rgba(0,0,0,.1)' : 'transparent',
+        minsPad: minsEdit ? 'calc(1 * var(--es, 1px)) calc(5 * var(--es, 1px))' : 'calc(1 * var(--es, 1px)) 0',
+        minsW: minsEdit ? 'calc(26 * var(--es, 1px))' : '0',
+        minsRef: el => { if (el) this.minsRefs[c.id] = el; },
+        stop: e => e.stopPropagation(),
+        onSelect: () => { if (!st.editing) this.setMinutes(c.minutes, c.id, true); },
+        onDel: e => {
+          e.stopPropagation();
+          this.setState(s => ({ chips: s.chips.filter(x => x.id !== c.id) }), () => { this.save(); this.resize(); this.measureStrip(); });
+        },
+        onEmoji: e => { if (!st.editing) return; e.stopPropagation(); this.openEmoji(e.currentTarget, c.id); },
+        /* Typed feedback is applied straight to the DOM: a setState per
+           keystroke would re-render the contenteditable and drop the caret. */
+        onName: e => {
+          const el = e.currentTarget, v = el.textContent.trim();
+          c.name = v;
+          const box = el.closest('[data-chip]');
+          if (box) {
+            box.style.borderStyle = v ? 'solid' : 'dashed';
+            const g = box.querySelector('[data-ghost]');
+            if (g) g.style.display = v ? 'none' : 'block';
+          }
+          el.style.minWidth = v ? '0px' : 'calc(58 * var(--es, 1px))';
+          this.save();
+        },
+        onNameBlur: e => { e.currentTarget.textContent = c.name; this.measureStrip(); },
+        onNameKey: e => {
+          e.stopPropagation();
+          if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.currentTarget.blur(); }
+        },
+        minsDown: e => { if (st.editing) e.stopPropagation(); },
+        minsClick: e => {
+          if (!st.editing || minsEdit) return;
+          e.stopPropagation(); this.pendingCaret = true; this.setState({ minsEdit: c.id });
+        },
+        minsKey: e => {
+          e.stopPropagation();
+          if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.currentTarget.blur(); }
+          else if (!/^[0-9]$/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key) && !e.metaKey && !e.ctrlKey) e.preventDefault();
+        },
+        minsBlur: e => {
+          const n = Math.max(1, Math.min(100, parseInt(e.currentTarget.textContent, 10) || c.minutes));
+          this.setState(s => ({ chips: s.chips.map(x => x.id === c.id ? { ...x, minutes: n } : x), minsEdit: null }), () => { this.save(); this.measureStrip(); });
+        },
+        onColour: e => {
+          const v = e.target.value;
+          this.setState(s => ({ chips: s.chips.map(x => x.id === c.id ? { ...x, colour: v } : x) }), () => this.save());
+        }
+      };
+    });
+
+    return {
+      wrapRef: this.wrapRef, cvRef: this.cvRef, cardRef: this.cardRef, rowRef: this.rowRef,
+      chipsRef: this.chipsRef, stripRef: this.stripRef, trackRef: this.trackRef, volRef: this.volRef,
+      fileRef: this.fileRef, fileARef: this.fileARef, emojiInRef: this.emojiInRef,
+      accent, stop: this.stop, chips,
+
+      toolsO: st.panel !== 'closed' ? 0 : st.tools ? 1 : 0,
+      toolsT: st.tools && st.panel === 'closed' ? 'none' : 'translateY(calc(-5 * var(--s, 1px))) scale(.95)',
+      toolsPE: st.panel === 'closed' ? 'auto' : 'none',
+      openPanel: e => { e.stopPropagation(); this.setState({ panel: 'open' }); },
+      closePanel: e => { e.stopPropagation(); this.setState({ panel: 'closing' }, this.settle); },
+      panelOn: st.panel !== 'closed',
+      panelAnim: st.panel === 'closing' ? 'sheetOut .17s ease both' : 'sheetIn .26s cubic-bezier(.2,.9,.2,1) both',
+
+      shortRing: ring(st.active === 'short'), longRing: ring(st.active === 'long'),
+      pickShort: () => { if (!st.editing) this.setMinutes(5, 'short', true); },
+      pickLong: () => { if (!st.editing) this.setMinutes(15, 'long', true); },
+      onAdd: this.addChip,
+      onDone: e => { e.stopPropagation(); this.commitEdit(); },
+      doneDisp: st.editing ? 'inline-flex' : 'none',
+      onStripScroll: this.measureStrip,
+
+      minutes: st.minutes,
+      fillPct: ((st.minutes - 1) / 99 * 100).toFixed(2) + '%',
+      valAnim: (st.valFlip ? 'vpopA' : 'vpopB') + ' .3s cubic-bezier(.2,.9,.2,1) both',
+      trackDown: this.trackDown, stepDown: this.step(-1), stepUp: this.step(1),
+
+      dragging: st.dragging,
+      emojiOn: !!st.emoji,
+      emojiX: st.emoji ? st.emoji.x + 'px' : '0px',
+      emojiY: st.emoji ? st.emoji.y + 'px' : '0px',
+      emojiList: this.EMO.map(ch => ({ char: ch, pick: e => { e.stopPropagation(); this.applyEmoji(ch); } })),
+      onEmojiIn: e => {
+        const v = [...e.target.value.trim()]; if (!v.length) return;
+        this.applyEmoji(/\p{Extended_Pictographic}/u.test(v[0]) && v.length > 1 ? e.target.value.trim() : v[0]);
+      },
+      onEmojiKey: e => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); this.applyEmoji(e.target.value.trim()); }
+        if (e.key === 'Escape') this.setState({ emoji: null });
+      },
+
+      invBg: st.invert ? accent : '#dcdcdc', invKnob: knob(st.invert),
+      dimBg: st.autoDim ? accent : '#dcdcdc', dimKnob: knob(st.autoDim),
+      loopBg: st.loop ? '#945F00' : '#dcdcdc', loopKnob: knob(st.loop),
+      tglInv: this.tglInv, tglDim: this.tglDim, tglLoop: this.tglLoop,
+      volPct: (st.volume * 100).toFixed(1) + '%', volDown: this.volDown,
+      imgName: st.imgName, ringName: st.ringName,
+      imgShort: this.shortName(st.imgName), ringShort: this.shortName(st.ringName),
+      pickImg: e => { e.stopPropagation(); this.fileRef.current.click(); },
+      clearImg: e => {
+        e.stopPropagation();
+        try { localStorage.removeItem(this.KEY_IMG); localStorage.removeItem(this.KEY_IMG + '.name'); } catch (err) {}
+        this.S.img = null; this.computeDim(); this.setState({ imgName: 'Default gradient' });
+      },
+      pickRing: e => { e.stopPropagation(); this.fileARef.current.click(); },
+      clearRing: e => {
+        e.stopPropagation();
+        this.idbSet('ring', null).catch(() => {}); this.idbSet('ringName', null).catch(() => {});
+        this.stopAlarm(); this.useRing(null);
+      },
+      onFile: e => this.storeImage(e.target.files[0]),
+      onFileA: e => this.storeRing(e.target.files[0]),
+      testLabel: st.testing ? 'Stop' : 'Play',
+      onTest: e => {
+        e.stopPropagation();
+        if (st.testing) { this.stopAlarm(); this.setState({ testing: false }); return; }
+        this.playAlarm(true); this.setState({ testing: true });
+        clearTimeout(this.testT);
+        this.testT = setTimeout(() => { this.stopAlarm(); this.setState({ testing: false }); }, 4000);
+      }
+    };
+  }
 }
-
-let dragDepth = 0;
-window.addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; document.body.classList.add("dragging"); });
-window.addEventListener("dragover",  e => e.preventDefault());
-window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
-window.addEventListener("drop", e => {
-  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
-  takeFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
-});
-window.addEventListener("paste", e => {
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
-  for (const it of items) if (it.type && it.type.startsWith("image/")) { storeImage(it.getAsFile()); break; }
-});
-
-/* ---------- boot ---------- */
-
-buildRow();
-window.addEventListener("resize", resize);
-computeDim();
-resize();
-if (document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(() => { fitCache.clear(); draw(); });
-}
-})();
 </script>
 </body>
 </html>
