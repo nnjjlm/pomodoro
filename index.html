@@ -15,6 +15,7 @@
   *, *::before, *::after { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: #191919; overflow: hidden; }
   .sc-host, x-dc { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 100%; }
+  #dc-root { width: 100%; }
   body { color: #fff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; display: flex; align-items: center; justify-content: center; }
   a { color: #90A3FF; text-decoration: none; }
   a:hover { color: #fff; }
@@ -165,7 +166,7 @@
   &quot;cursorMagnet&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Motion&quot; },
   &quot;accent&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#24094A&quot;, &quot;options&quot;: [&quot;#24094A&quot;, &quot;#001697&quot;, &quot;#945F00&quot;, &quot;#0B4B3A&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Card&quot; },
   &quot;startMinutes&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 25, &quot;min&quot;: 1, &quot;max&quot;: 100, &quot;unit&quot;: &quot;min&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Card&quot; },
-  &quot;maxZoom&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 1.7, &quot;min&quot;: 1, &quot;max&quot;: 2.6, &quot;step&quot;: 0.1, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Card&quot; }
+  &quot;maxZoom&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 3, &quot;min&quot;: 1, &quot;max&quot;: 4, &quot;step&quot;: 0.1, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Card&quot; }
 }">
 class Component extends DCLogic {
   wrapRef = React.createRef(); cvRef = React.createRef(); cardRef = React.createRef();
@@ -302,9 +303,9 @@ class Component extends DCLogic {
 
   resize = () => {
     const wrap = this.wrapRef.current; if (!wrap || !this.ctx) return;
-    const host = wrap.parentElement;
-    const vw = Math.max(240, Math.min(window.innerWidth || 9999, (host && host.clientWidth) || 9999));
-    const vh = Math.max(180, window.innerHeight || 600);
+    const de = document.documentElement;
+    const vw = Math.max(240, de.clientWidth || window.innerWidth || 9999);
+    const vh = Math.max(180, de.clientHeight || window.innerHeight || 600);
     const stacked = vw < 780 || this.state.chips.length >= 3 || this.state.editing;
     /* Editing is a mode, not a tooltip: the whole shortcut row steps up a
        size so the inline delete, icon, minutes and colour dot are real
@@ -315,7 +316,7 @@ class Component extends DCLogic {
     for (let i = 0; i < 4; i++) {
       const second = stacked ? Math.max(z.trackh, z.step, z.fval * 1.1) + z.rowgap : 0;
       const below = z.rowh + z.rowmt + second + z.wpad * 2 + 2;
-      s = Math.max(0.11, Math.min((vw - z.wpad * 2) / this.K.W, (vh - below) / this.K.H, this.props.maxZoom ?? 1.7));
+      s = Math.max(0.11, Math.min((vw - z.wpad * 2) / this.K.W, (vh - below) / this.K.H, this.props.maxZoom ?? 3));
       z = this.sizes(s, stacked, vw, ed);
     }
     this.scale = s;
